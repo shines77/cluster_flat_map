@@ -150,9 +150,9 @@ IcUpdateLog.htm
 # Ignore CMake cache or temp files(folders)
 /CMakeFiles
 /Makefile
-*CMakeCache.txt
 # /cmake/
-# *.cmake
+*CMakeCache.txt
+*.cmake
 
 # Ignore dependency library folders
 /deps/boost/
@@ -193,9 +193,6 @@ _ReSharper*/
 /Device-Coverage/
 /Device-Profile/
 /Device-Release/
-
-# Ignore VLD local switch define
-/src/jstd/basic/vld_def.h
 
 # Ignore jstd exe filename
 jstd.exe

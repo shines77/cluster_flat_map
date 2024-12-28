@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd;cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="res">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="src\jstd">
+      <UniqueIdentifier>{cb1c8b56-6f1b-40cf-ab36-16f9735e5ed5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jstd\hashmap">
+      <UniqueIdentifier>{a44bcc60-14d2-410b-8691-66f527938521}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jstd\hashmap\detail">
+      <UniqueIdentifier>{b61a9005-2b5d-4b9a-83e0-4296ee8e098a}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\cluster_flat_map.hpp">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\detail\hashmap_traits.h">
+      <Filter>src\jstd\hashmap\detail</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\src\jstd\dll.cpp">
+      <Filter>src\jstd</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
