@@ -54,7 +54,7 @@
 namespace jstd {
 
 template <typename Key, typename Value>
-class flat_map_types
+class flat_map_type_policy
 {
 public:
     typedef Key                                             key_type;
@@ -68,7 +68,7 @@ public:
 
     typedef value_type                                      element_type;
 
-    typedef flat_map_types<Key, Value>                      this_type;
+    typedef flat_map_type_policy<Key, Value>                this_type;
 };
 
 } // namespace jstd

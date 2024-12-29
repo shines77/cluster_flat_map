@@ -157,7 +157,8 @@
     <ClInclude Include="..\..\..\src\jstd\hashmap\cluster_flat_map.hpp" />
     <ClInclude Include="..\..\..\src\jstd\hashmap\cluster_flat_table.hpp" />
     <ClInclude Include="..\..\..\src\jstd\hashmap\detail\hashmap_traits.h" />
-    <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_types.hpp" />
+    <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_iterator.hpp" />
+    <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_type_policy.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jstd\dll_main.cpp" />

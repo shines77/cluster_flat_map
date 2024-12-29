@@ -62,10 +62,14 @@
 #include <utility>
 
 #include "jstd/hashmap/detail/hashmap_traits.h"
-#include "jstd/hashmap/flat_map_types.hpp"
+#include "jstd/hashmap/flat_map_type_policy.hpp"
 #include "jstd/hashmap/cluster_flat_table.hpp"
 
 namespace jstd {
+
+template <typename TypePolicy, typename Hash,
+          typename KeyEqual, typename Allocator>
+class cluster_flat_table;
 
 template <typename Key, typename Value,
           typename Hash = std::hash< std::remove_const_t<Key> >,
@@ -76,14 +80,15 @@ class cluster_flat_map
 {
     //
 public:
-    typedef flat_map_types<Key, Value>          hashmap_types;
+    typedef flat_map_type_policy<Key, Value>    type_policy;
     typedef std::size_t                         size_type;
     typedef std::intptr_t                       ssize_type;
+    typedef std::ptrdiff_t                      difference_type;
 
     typedef Key                                 key_type;
     typedef Value                               mapped_type;
-    typedef typename hashmap_types::value_type  value_type;
-    typedef typename hashmap_types::init_type   init_type;
+    typedef typename type_policy::value_type    value_type;
+    typedef typename type_policy::init_type     init_type;
     typedef Hash                                hasher_t;
     typedef KeyEqual                            key_equal_t;
     typedef Allocator                           allocator_type;
@@ -94,28 +99,37 @@ public:
     typedef typename std::allocator_traits<allocator_type>::pointer         pointer;
     typedef typename std::allocator_traits<allocator_type>::const_pointer   const_pointer;
 
-    typedef cluster_flat_table<hashmap_types, Hash, KeyEqual,
+    typedef cluster_flat_table<type_policy, Hash, KeyEqual,
         typename std::allocator_traits<Allocator>::template rebind_alloc<value_type>>
-                                                table_type;    
+                                                table_type;
+
+    typedef typename table_type::ctrl_type      ctrl_type;
+    typedef typename table_type::slot_type      slot_type;
+
+    typedef typename table_type::iterator       iterator;
+    typedef typename table_type::const_iterator const_iterator;
 
 private:
     table_type table_;
 
 public:
+    ///
+    /// Constructors
+    ///
     cluster_flat_map() : cluster_flat_map(0) {}
 
-    explicit cluster_flat_map(size_type size, hasher_t const & hash = hasher_t(),
+    explicit cluster_flat_map(size_type capacity, hasher_t const & hash = hasher_t(),
                               key_equal_t const & pred = key_equal_t(),
                               allocator_type const & allocator = allocator_type())
-        : table_(size, hash, pred, allocator) {
+        : table_(capacity, hash, pred, allocator) {
     }
 
-    cluster_flat_map(size_type size, allocator_type const & allocator)
-        : cluster_flat_map(size, hasher(), key_equal(), allocator) {
+    cluster_flat_map(size_type capacity, allocator_type const & allocator)
+        : cluster_flat_map(capacity, hasher(), key_equal(), allocator) {
     }
 
-    cluster_flat_map(size_type size, hasher_t const & hash, allocator_type const & allocator)
-        : cluster_flat_map(size, hash, key_equal(), allocator) {
+    cluster_flat_map(size_type capacity, hasher_t const & hash, allocator_type const & allocator)
+        : cluster_flat_map(capacity, hash, key_equal(), allocator) {
     }
 
     template <typename InputIterator>
@@ -128,20 +142,20 @@ public:
     }
 
     template <typename Iterator>
-    cluster_flat_map(Iterator first, Iterator last, size_type size = 0,
+    cluster_flat_map(Iterator first, Iterator last, size_type capacity = 0,
                      hasher_t const & hash = hasher_t(), key_equal_t const & pred = key_equal_t(),
                      allocator_type const & allocator = allocator_type())
-        : cluster_flat_map(size, hash, pred, allocator) {
+        : cluster_flat_map(capacity, hash, pred, allocator) {
         this->insert(first, last);
     }
 
     template <typename Iterator>
-    cluster_flat_map(Iterator first, Iterator last, size_type size, allocator_type const & allocator)
+    cluster_flat_map(Iterator first, Iterator last, size_type capacity, allocator_type const & allocator)
         : cluster_flat_map(first, last, size, hasher(), key_equal(), allocator) {
     }
 
     template <typename Iterator>
-    cluster_flat_map(Iterator first, Iterator last, size_type size,
+    cluster_flat_map(Iterator first, Iterator last, size_type capacity,
                      hasher_t const & hash, allocator_type const & allocator)
         : cluster_flat_map(first, last, size, hash, key_equal(), allocator) {
     }
@@ -163,7 +177,7 @@ public:
     }
 
     cluster_flat_map(std::initializer_list<value_type> ilist,
-                     size_type size = 0, hasher_t const & hash = hasher_t(),
+                     size_type capacity = 0, hasher_t const & hash = hasher_t(),
                      key_equal_t const & pred = key_equal_t(),
                      allocator_type const & allocator = allocator_type())
         : cluster_flat_map(ilist.begin(), ilist.end(), size, hash, pred, allocator) {
@@ -173,17 +187,48 @@ public:
         : cluster_flat_map(ilist, size_type(0), hasher(), key_equal(), allocator) {
     }
 
-    cluster_flat_map(std::initializer_list<value_type> init, size_type size,
+    cluster_flat_map(std::initializer_list<value_type> init, size_type capacity,
                      allocator_type const & allocator)
         : cluster_flat_map(init, size, hasher(), key_equal(), allocator) {
     }
 
-    cluster_flat_map(std::initializer_list<value_type> init, size_type size,
+    cluster_flat_map(std::initializer_list<value_type> init, size_type capacity,
                      hasher_t const & hash, allocator_type const & allocator)
         : cluster_flat_map(init, size, hash, key_equal(), allocator) {
     }
 
     ~cluster_flat_map() = default;
+
+    allocator_type get_allocator() const noexcept {
+        return table_.get_allocator();
+    }
+
+    ///
+    /// Iterators
+    ///
+    iterator begin() noexcept { return table_.begin(); }
+    iterator end() noexcept { return table_.end(); }
+
+    const_iterator begin() const noexcept { return table_.begin(); }
+    const_iterator end() const noexcept { return table_.end(); }
+
+    const_iterator cbegin() const noexcept { return table_.cbegin(); }
+    const_iterator cend() const noexcept { return table_.cend(); }
+
+    ///
+    /// Capacity
+    ///
+    bool empty() const noexcept { return table_.empty(); }
+    size_type size() const noexcept { return table_.size(); }
+    size_type capacity() const noexcept { return table_.capacity(); }
+    size_type max_size() const noexcept { return table_.max_size(); }
+
+    size_type bucket_count() const noexcept { return table_.bucket_count(); }
+
+    ///
+    /// Modifiers
+    ///
+    void clear() noexcept { table_.clear(); }
 
     template <typename InputIterator>
     void insert(InputIterator first, InputIterator last) {
