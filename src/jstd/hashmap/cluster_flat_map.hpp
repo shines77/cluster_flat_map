@@ -57,68 +57,138 @@
 #include <memory>
 
 #include <cstdint>
+#include <initializer_list>
 #include <type_traits>
 #include <utility>
 
 #include "jstd/hashmap/detail/hashmap_traits.h"
+#include "jstd/hashmap/flat_map_types.hpp"
+#include "jstd/hashmap/cluster_flat_table.hpp"
 
 namespace jstd {
 
 template <typename Key, typename Value,
           typename Hash = std::hash< std::remove_const_t<Key> >,
           typename KeyEqual = std::equal_to< std::remove_const_t<Key> >,
-          typename Allocator = std::allocator< std::pair<const Key, Value> > >
+          typename Allocator = std::allocator< std::pair<const std::remove_const_t<Key>,
+                                                         std::remove_const_t<Value>> > >
 class cluster_flat_map
 {
     //
 public:
-    typedef Key             key_type;
-    typedef Value           value_type;
-    typedef Hash            hasher_t;
-    typedef KeyEqual        key_equal_t;
-    typedef Allocator       allocator_type;
+    typedef flat_map_types<Key, Value>          hashmap_types;
+    typedef std::size_t                         size_type;
+    typedef std::intptr_t                       ssize_type;
 
-    static constexpr bool kUseIndexSalt = false;
+    typedef Key                                 key_type;
+    typedef Value                               mapped_type;
+    typedef typename hashmap_types::value_type  value_type;
+    typedef typename hashmap_types::init_type   init_type;
+    typedef Hash                                hasher_t;
+    typedef KeyEqual                            key_equal_t;
+    typedef Allocator                           allocator_type;
 
-    static constexpr bool kIsTransparent = (detail::is_transparent<Hash>::value && detail::is_transparent<KeyEqual>::value);
+    typedef value_type &                        reference;
+    typedef value_type const &                  const_reference;
 
-    static constexpr std::uint8_t kEmptySlot    = 0b1111111111;
-    static constexpr std::uint8_t kDelectedSlot = 0b1111111110;
+    typedef typename std::allocator_traits<allocator_type>::pointer         pointer;
+    typedef typename std::allocator_traits<allocator_type>::const_pointer   const_pointer;
 
-    struct meta_data {
-        std::uint8_t hash;
+    typedef cluster_flat_table<hashmap_types, Hash, KeyEqual,
+        typename std::allocator_traits<Allocator>::template rebind_alloc<value_type>>
+                                                table_type;    
 
-        meta_data(std::uint8_t hash = kEmptySlot) : hash(hash) {}
-        ~meta_data() {}
+private:
+    table_type table_;
 
-        bool is_empty_slot() const {
-            return (hash == kEmptySlot);
-        }
+public:
+    cluster_flat_map() : cluster_flat_map(0) {}
 
-        bool is_delected_slot() const {
-            return (hash == kDelectedSlot);
-        }
+    explicit cluster_flat_map(size_type size, hasher_t const & hash = hasher_t(),
+                              key_equal_t const & pred = key_equal_t(),
+                              allocator_type const & allocator = allocator_type())
+        : table_(size, hash, pred, allocator) {
+    }
 
-        bool is_mark_slot() const {
-            return (hash >= kDelectedSlot);
-        }
+    cluster_flat_map(size_type size, allocator_type const & allocator)
+        : cluster_flat_map(size, hasher(), key_equal(), allocator) {
+    }
 
-        bool is_normal_slot() const {
-            return (hash < kDelectedSlot);
-        }
+    cluster_flat_map(size_type size, hasher_t const & hash, allocator_type const & allocator)
+        : cluster_flat_map(size, hash, key_equal(), allocator) {
+    }
 
-        bool is_equals(std::uint8_t hash) {
-            return (hash == this->hash);
-        }
-    };
+    template <typename InputIterator>
+    cluster_flat_map(InputIterator first, InputIterator last, allocator_type const & allocator)
+        : cluster_flat_map(first, last, size_type(0), hasher(), key_equal(), allocator) {
+    }
 
-    static constexpr bool kIsSmallKeyType   = (sizeof(key_type)   <= sizeof(std::size_t) * 2);
-    static constexpr bool kIsSmallValueType = (sizeof(value_type) <= sizeof(std::size_t) * 2);
+    explicit cluster_flat_map(allocator_type const & allocator)
+        : cluster_flat_map(0, allocator) {
+    }
 
-    template <typename Key, typename Value>
-    class slot_layout {
+    template <typename Iterator>
+    cluster_flat_map(Iterator first, Iterator last, size_type size = 0,
+                     hasher_t const & hash = hasher_t(), key_equal_t const & pred = key_equal_t(),
+                     allocator_type const & allocator = allocator_type())
+        : cluster_flat_map(size, hash, pred, allocator) {
+        this->insert(first, last);
+    }
+
+    template <typename Iterator>
+    cluster_flat_map(Iterator first, Iterator last, size_type size, allocator_type const & allocator)
+        : cluster_flat_map(first, last, size, hasher(), key_equal(), allocator) {
+    }
+
+    template <typename Iterator>
+    cluster_flat_map(Iterator first, Iterator last, size_type size,
+                     hasher_t const & hash, allocator_type const & allocator)
+        : cluster_flat_map(first, last, size, hash, key_equal(), allocator) {
+    }
+
+    cluster_flat_map(cluster_flat_map const & other) : table_(other.table_) {
+    }
+
+    cluster_flat_map(cluster_flat_map const & other, allocator_type const & allocator)
+        : table_(other.table_, allocator) {
+    }
+
+    cluster_flat_map(cluster_flat_map && other)
+        noexcept(std::is_nothrow_move_constructible<table_type>::value)
+        : table_(std::move(other.table_)) {
+    }
+
+    cluster_flat_map(cluster_flat_map && other, allocator_type const & allocator)
+        : table_(std::move(other.table_), allocator) {
+    }
+
+    cluster_flat_map(std::initializer_list<value_type> ilist,
+                     size_type size = 0, hasher_t const & hash = hasher_t(),
+                     key_equal_t const & pred = key_equal_t(),
+                     allocator_type const & allocator = allocator_type())
+        : cluster_flat_map(ilist.begin(), ilist.end(), size, hash, pred, allocator) {
+    }
+
+    cluster_flat_map(std::initializer_list<value_type> ilist, allocator_type const & allocator)
+        : cluster_flat_map(ilist, size_type(0), hasher(), key_equal(), allocator) {
+    }
+
+    cluster_flat_map(std::initializer_list<value_type> init, size_type size,
+                     allocator_type const & allocator)
+        : cluster_flat_map(init, size, hasher(), key_equal(), allocator) {
+    }
+
+    cluster_flat_map(std::initializer_list<value_type> init, size_type size,
+                     hasher_t const & hash, allocator_type const & allocator)
+        : cluster_flat_map(init, size, hash, key_equal(), allocator) {
+    }
+
+    ~cluster_flat_map() = default;
+
+    template <typename InputIterator>
+    void insert(InputIterator first, InputIterator last) {
         //
-    };
+    }
 };
 
 } // namespace jstd

@@ -36,6 +36,16 @@ template <typename T>
 struct is_transparent<T, void_t<typename T::is_transparent>>
     : std::true_type {};
 
+template <typename T>
+struct is_plain_type {
+    static constexpr bool value = (std::is_arithmetic<T>::value || std::is_enum<T>::value);
+};
+
+template <typename T>
+struct is_swappable {
+    static constexpr bool value = is_plain_type<T>::value || has_member_swap<T, T &>::value;
+};
+
 } // namespace detail
 } // namespace jstd
 

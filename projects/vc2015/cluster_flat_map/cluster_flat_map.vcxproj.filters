@@ -26,9 +26,15 @@
     <ClInclude Include="..\..\..\src\jstd\hashmap\detail\hashmap_traits.h">
       <Filter>src\jstd\hashmap\detail</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_types.hpp">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\cluster_flat_table.hpp">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\src\jstd\dll.cpp">
+    <ClCompile Include="..\..\..\src\jstd\dll_main.cpp">
       <Filter>src\jstd</Filter>
     </ClCompile>
   </ItemGroup>
