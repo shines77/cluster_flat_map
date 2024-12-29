@@ -72,10 +72,10 @@ template <typename TypePolicy, typename Hash,
 class cluster_flat_table;
 
 template <typename Key, typename Value,
-          typename Hash = std::hash< std::remove_const_t<Key> >,
-          typename KeyEqual = std::equal_to< std::remove_const_t<Key> >,
-          typename Allocator = std::allocator< std::pair<const std::remove_const_t<Key>,
-                                                         std::remove_const_t<Value>> > >
+          typename Hash = std::hash< typename std::remove_const<Key>::type >,
+          typename KeyEqual = std::equal_to< typename std::remove_const<Key>::type >,
+          typename Allocator = std::allocator< std::pair<const typename std::remove_const<Key>::type,
+                                                         typename std::remove_const<Value>::type> > >
 class cluster_flat_map
 {
     //
