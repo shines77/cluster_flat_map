@@ -129,12 +129,12 @@ public:
     }
 
     cluster_flat_map(size_type capacity, hasher_t const & hash, allocator_type const & allocator)
-        : cluster_flat_map(capacity, hash, key_equal(), allocator) {
+        : cluster_flat_map(capacity, hash, key_equal_t(), allocator) {
     }
 
     template <typename InputIterator>
     cluster_flat_map(InputIterator first, InputIterator last, allocator_type const & allocator)
-        : cluster_flat_map(first, last, size_type(0), hasher(), key_equal(), allocator) {
+        : cluster_flat_map(first, last, size_type(0), hasher_t(), key_equal_t(), allocator) {
     }
 
     explicit cluster_flat_map(allocator_type const & allocator)
@@ -151,13 +151,13 @@ public:
 
     template <typename Iterator>
     cluster_flat_map(Iterator first, Iterator last, size_type capacity, allocator_type const & allocator)
-        : cluster_flat_map(first, last, size, hasher(), key_equal(), allocator) {
+        : cluster_flat_map(first, last, size, hasher_t(), key_equal_t(), allocator) {
     }
 
     template <typename Iterator>
     cluster_flat_map(Iterator first, Iterator last, size_type capacity,
                      hasher_t const & hash, allocator_type const & allocator)
-        : cluster_flat_map(first, last, size, hash, key_equal(), allocator) {
+        : cluster_flat_map(first, last, size, hash, key_equal_t(), allocator) {
     }
 
     cluster_flat_map(cluster_flat_map const & other) : table_(other.table_) {
@@ -184,17 +184,17 @@ public:
     }
 
     cluster_flat_map(std::initializer_list<value_type> ilist, allocator_type const & allocator)
-        : cluster_flat_map(ilist, size_type(0), hasher(), key_equal(), allocator) {
+        : cluster_flat_map(ilist, size_type(0), hasher_t(), key_equal_t(), allocator) {
     }
 
     cluster_flat_map(std::initializer_list<value_type> init, size_type capacity,
                      allocator_type const & allocator)
-        : cluster_flat_map(init, size, hasher(), key_equal(), allocator) {
+        : cluster_flat_map(init, size, hasher_t(), key_equal_t(), allocator) {
     }
 
     cluster_flat_map(std::initializer_list<value_type> init, size_type capacity,
                      hasher_t const & hash, allocator_type const & allocator)
-        : cluster_flat_map(init, size, hash, key_equal(), allocator) {
+        : cluster_flat_map(init, size, hash, key_equal_t(), allocator) {
     }
 
     ~cluster_flat_map() = default;
