@@ -134,7 +134,7 @@ public:
 
     flat_map_iterator & operator ++ () {
         const ctrl_type * ctrl = this->owner_->ctrl_at(this->index_);
-        size_type max_index = this->owner_->max_slot_capacity();
+        size_type max_index = this->owner_->slot_capacity();
         do {
             ++(this->index_);
             ++ctrl;
@@ -217,13 +217,16 @@ public:
 };
 
 template <typename HashMap, typename T>
-class flat_map_iterator<T, true> {
+class flat_map_iterator<HashMap, T, true> {
 public:
     using iterator_category = std::forward_iterator_tag;
 
     using value_type = T;
     using pointer = T *;
     using reference = T &;
+    using hashmap_type = HashMap;
+    using ctrl_type = typename HashMap::ctrl_type;
+    using slot_type = typename HashMap::slot_type;
 
     using mutable_value_type = typename std::remove_const<value_type>::type;
     using const_value_type = typename std::add_const<mutable_value_type>::type;

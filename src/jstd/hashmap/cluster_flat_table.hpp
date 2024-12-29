@@ -51,6 +51,16 @@
 
 #pragma once
 
+#include <stdint.h>
+
+#include <cstdint>
+#include <memory>
+
+#include <cstdint>
+#include <initializer_list>
+#include <type_traits>
+#include <utility>
+
 #include "jstd/hashmap/flat_map_iterator.hpp"
 
 namespace jstd {
