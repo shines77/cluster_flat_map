@@ -125,7 +125,7 @@ public:
     }
 
     cluster_flat_map(size_type capacity, allocator_type const & allocator)
-        : cluster_flat_map(capacity, hasher(), key_equal(), allocator) {
+        : cluster_flat_map(capacity, hasher_t(), key_equal_t(), allocator) {
     }
 
     cluster_flat_map(size_type capacity, hasher_t const & hash, allocator_type const & allocator)
