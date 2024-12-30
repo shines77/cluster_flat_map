@@ -62,6 +62,15 @@
 
 #include <assert.h>
 
+#if defined(_MSC_VER)
+#include <xatomic.h>
+#define __COMPILER_BARRIER() \
+    _Compiler_barrier()
+#else
+#define __COMPILER_BARRIER() \
+    __asm volatile ("" : : : "memory")
+#endif
+
 namespace jstd {
 
 static inline
@@ -242,13 +251,15 @@ public:
     inline int match_empty_mask() const {
         // Latency = 6
         __m128i ctrl_bits = _load_data();
+        __COMPILER_BARRIER();
         __m128i mask_bits = _mm_set1_epi8(kHashMask);
+        __COMPILER_BARRIER();
 
         __m128i empty_bits;
         if (kEmptySlot == 0b00000000)
-            empty_bits = _mm_setzero_si128;
+            empty_bits = _mm_setzero_si128();
         else if (kEmptySlot == 0b11111111)
-            empty_bits = _mm_setones_si128;
+            empty_bits = _mm_setones_si128();
         else
             empty_bits = _mm_set1_epi8(kEmptySlot);
         
@@ -265,7 +276,9 @@ public:
     inline int match_hash_mask(hash_type hash) const {
         // Latency = 6
         __m128i ctrl_bits  = _load_data();
+        __COMPILER_BARRIER();
         __m128i mask_bits  = _mm_set1_epi8(kHashMask);
+        __COMPILER_BARRIER();
         __m128i hash_bits  = _mm_set1_epi8(hash);
         __m128i match_mask = _mm_cmpeq_epi8(_mm_and_si128(ctrl_bits, mask_bits), hash_bits);
         int mask = _mm_movemask_epi8(match_mask);
