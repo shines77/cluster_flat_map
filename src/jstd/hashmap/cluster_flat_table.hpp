@@ -4,8 +4,8 @@
 
   Copyright (c) 2024 XiongHui Guo (gz_shines at msn.com)
 
-  https://github.com/shines77/jstd_cluster_flat_table
-  https://gitee.com/shines77/jstd_cluster_flat_table
+  https://github.com/shines77/cluster_flat_table
+  https://gitee.com/shines77/cluster_flat_table
 
 *************************************************************************************
 
@@ -95,39 +95,10 @@ public:
 
     static constexpr bool kIsTransparent = (detail::is_transparent<Hash>::value && detail::is_transparent<KeyEqual>::value);
 
-    static constexpr std::uint8_t kEmptySlot  = 0b1111111111;
-    static constexpr std::uint8_t kUnusedSlot = 0b1111111110;
-
     static constexpr size_type npos = static_cast<size_type>(-1);
 
-    struct meta_ctrl {
-        std::uint8_t hash;
-
-        meta_ctrl(std::uint8_t hash = kEmptySlot) : hash(hash) {}
-        ~meta_ctrl() {}
-
-        bool is_empty_slot() const {
-            return (hash == kEmptySlot);
-        }
-
-        bool is_unused_slot() const {
-            return (hash == kUnusedSlot);
-        }
-
-        bool is_mark_slot() const {
-            return (hash >= kUnusedSlot);
-        }
-
-        bool is_normal_slot() const {
-            return (hash < kUnusedSlot);
-        }
-
-        bool is_equals(std::uint8_t hash) {
-            return (hash == this->hash);
-        }
-    };
-
-    using ctrl_type = meta_ctrl;
+    using ctrl_type = cluster_meta_ctrl;
+    using cluster_type = flat_map_cluster16<cluster_meta_ctrl>;
 
     static constexpr bool is_slot_trivial_copyable =
             (std::is_trivially_copyable<value_type>::value ||

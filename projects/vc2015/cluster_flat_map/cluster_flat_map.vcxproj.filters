@@ -35,6 +35,9 @@
     <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_type_policy.hpp">
       <Filter>src\jstd\hashmap</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_cluster.hpp">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jstd\dll_main.cpp">

@@ -4,8 +4,8 @@
 
   Copyright (c) 2024 XiongHui Guo (gz_shines at msn.com)
 
-  https://github.com/shines77/jstd_cluster_flat_map
-  https://gitee.com/shines77/jstd_cluster_flat_map
+  https://github.com/shines77/cluster_flat_table
+  https://gitee.com/shines77/cluster_flat_table
 
 *************************************************************************************
 

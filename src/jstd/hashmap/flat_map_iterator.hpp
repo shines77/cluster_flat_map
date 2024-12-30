@@ -4,8 +4,8 @@
 
   Copyright (c) 2024 XiongHui Guo (gz_shines at msn.com)
 
-  https://github.com/shines77/jstd_cluster_flat_map
-  https://gitee.com/shines77/jstd_cluster_flat_map
+  https://github.com/shines77/cluster_flat_table
+  https://gitee.com/shines77/cluster_flat_table
 
 *************************************************************************************
 
@@ -62,7 +62,9 @@ public:
 
     using value_type = T;
     using pointer = T *;
+    using const_pointer = const T *;
     using reference = T &;
+    using const_reference = const T &;
     using hashmap_type = HashMap;
     using ctrl_type = typename HashMap::ctrl_type;
     using slot_type = typename HashMap::slot_type;
@@ -73,7 +75,7 @@ public:
     using opp_value_type = typename std::conditional<std::is_const<value_type>::value,
                                                      mutable_value_type,
                                                      const_value_type>::type;
-    using opp_flat_map_iterator = flat_map_iterator<opp_value_type, IsIndirectKV>;
+    using opp_flat_map_iterator = flat_map_iterator<HashMap, opp_value_type, IsIndirectKV>;
 
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
@@ -132,6 +134,14 @@ public:
         return (lhs.index() != rhs.index()) || (lhs.owner() != rhs.owner());
     }
 
+    friend bool operator == (const opp_flat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
+        return (lhs.index() == rhs.index()) && (lhs.owner() == rhs.owner());
+    }
+
+    friend bool operator != (const opp_flat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
+        return (lhs.index() != rhs.index()) || (lhs.owner() != rhs.owner());
+    }
+
     flat_map_iterator & operator ++ () {
         const ctrl_type * ctrl = this->owner_->ctrl_at(this->index_);
         size_type max_index = this->owner_->slot_capacity();
@@ -165,17 +175,27 @@ public:
         return copy;
     }
 
-    reference operator * () const {
+    reference operator * () {
         const slot_type * _slot = this->slot();
         return const_cast<slot_type *>(_slot)->value;
     }
 
-    pointer operator -> () const {
+    const_reference operator * () const {
+        const slot_type * _slot = this->slot();
+        return const_cast<slot_type *>(_slot)->value;
+    }
+
+    pointer operator -> () {
+        const slot_type * _slot = this->slot();
+        return std::addressof(const_cast<slot_type *>(_slot)->value);
+    }
+
+    const_pointer operator -> () const {
         const slot_type * _slot = this->slot();
         return std::addressof(const_cast<slot_type *>(_slot)->value);
     }
 #if 0
-    operator flat_map_iterator<const mutable_value_type, IsIndirectKV>() const noexcept {
+    operator flat_map_iterator<HashMap, const mutable_value_type, IsIndirectKV>() const noexcept {
         return { this->owner_, this->index_ };
     }
 #endif
@@ -223,7 +243,9 @@ public:
 
     using value_type = T;
     using pointer = T *;
+    using const_pointer = const T *;
     using reference = T &;
+    using const_reference = const T &;
     using hashmap_type = HashMap;
     using ctrl_type = typename HashMap::ctrl_type;
     using slot_type = typename HashMap::slot_type;
@@ -234,7 +256,7 @@ public:
     using opp_value_type = typename std::conditional<std::is_const<value_type>::value,
                                                      mutable_value_type,
                                                      const_value_type>::type;
-    using opp_flat_map_iterator = flat_map_iterator<opp_value_type, true>;
+    using opp_flat_map_iterator = flat_map_iterator<HashMap, opp_value_type, true>;
 
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
@@ -290,6 +312,14 @@ public:
         return (lhs.slot_ != rhs.slot());
     }
 
+    friend bool operator == (const opp_fflat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
+        return (lhs.slot_ == rhs.slot());
+    }
+
+    friend bool operator != (const opp_fflat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
+        return (lhs.slot_ != rhs.slot());
+    }
+
     flat_map_iterator & operator ++ () {
         ++(this->slot_);
         return *this;
@@ -312,11 +342,19 @@ public:
         return copy;
     }
 
-    reference operator * () const {
+    reference operator * () {
         return const_cast<slot_type *>(this->slot_)->value;
     }
 
-    pointer operator -> () const {
+    const_reference operator * () const {
+        return const_cast<slot_type *>(this->slot_)->value;
+    }
+
+    pointer operator -> () {
+        return std::addressof(const_cast<slot_type *>(this->slot_)->value);
+    }
+
+    const_pointer operator -> () const {
         return std::addressof(const_cast<slot_type *>(this->slot_)->value);
     }
 
@@ -332,8 +370,6 @@ public:
         return this->slot_;
     }
 };
-
-
 
 } // namespace jstd
 
