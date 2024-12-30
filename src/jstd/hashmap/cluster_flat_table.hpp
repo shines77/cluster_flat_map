@@ -62,6 +62,7 @@
 #include <utility>
 
 #include "jstd/hashmap/flat_map_iterator.hpp"
+#include "jstd/hashmap/flat_map_cluster.hpp"
 
 namespace jstd {
 
@@ -143,7 +144,7 @@ private:
     static constexpr size_type kDefaultMaxLoadFactorNum = 224;
     static constexpr size_type kDefaultMaxLoadFactorDen = 256;
 
-    ctrl_type *     ctrls_;
+    cluster_type *  clusters_;
     slot_type *     slots_;
     size_type       slot_size_;
     size_type       slot_mask_;     // capacity = slot_mask + 1
@@ -162,7 +163,7 @@ public:
     explicit cluster_flat_map(size_type capacity, hasher_t const & hash = hasher_t(),
                               key_equal_t const & pred = key_equal_t(),
                               allocator_type const & allocator = allocator_type())
-        : ctrls_(nullptr), slots_(nullptr), slot_size_(0), slot_mask_(static_cast<size_type>(capacity - 1)),
+        : clusters_(nullptr), slots_(nullptr), slot_size_(0), slot_mask_(static_cast<size_type>(capacity - 1)),
           slot_threshold_(calcDefaultLoadFactor(capacity)), max_load_factor_(kDefaultMaxLoadFactorNum) {
     }
 
