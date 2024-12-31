@@ -228,7 +228,7 @@ public:
     ///
     /// Modifiers
     ///
-    void clear() noexcept { table_.clear(); }
+    void clear(bool need_destroy = false) noexcept { table_.clear(need_destroy); }
 
     template <typename InputIterator>
     void insert(InputIterator first, InputIterator last) {

@@ -154,14 +154,53 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\src\jstd\basic\assert.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\compiler.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\export.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\inttypes.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\macros.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\msvc\inttypes.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\msvc\stdbool.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\msvc\stdint.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\platform.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\stddef.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\stdint.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\stdsize.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\unistd.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\vld.h" />
+    <ClInclude Include="..\..\..\src\jstd\basic\vld_def.h" />
+    <ClInclude Include="..\..\..\src\jstd\config\config.h" />
+    <ClInclude Include="..\..\..\src\jstd\config\config_cxx.h" />
+    <ClInclude Include="..\..\..\src\jstd\config\config_hw.h" />
+    <ClInclude Include="..\..\..\src\jstd\config\config_hw_detect.h" />
+    <ClInclude Include="..\..\..\src\jstd\config\config_jstd.h" />
+    <ClInclude Include="..\..\..\src\jstd\config\config_post.h" />
+    <ClInclude Include="..\..\..\src\jstd\config\config_pre.h" />
+    <ClInclude Include="..\..\..\src\jstd\hasher\fnv1a.h" />
+    <ClInclude Include="..\..\..\src\jstd\hasher\hashes.h" />
+    <ClInclude Include="..\..\..\src\jstd\hasher\hash_crc32.h" />
+    <ClInclude Include="..\..\..\src\jstd\hasher\hash_helper.h" />
+    <ClInclude Include="..\..\..\src\jstd\hasher\sha1.h" />
     <ClInclude Include="..\..\..\src\jstd\hashmap\cluster_flat_map.hpp" />
     <ClInclude Include="..\..\..\src\jstd\hashmap\cluster_flat_table.hpp" />
     <ClInclude Include="..\..\..\src\jstd\hashmap\detail\hashmap_traits.h" />
     <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_cluster.hpp" />
     <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_iterator.hpp" />
     <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_type_policy.hpp" />
+    <ClInclude Include="..\..\..\src\jstd\support\BitUtils.h" />
+    <ClInclude Include="..\..\..\src\jstd\support\BitVec.h" />
+    <ClInclude Include="..\..\..\src\jstd\support\CPUPrefetch.h" />
+    <ClInclude Include="..\..\..\src\jstd\support\Power2.h" />
+    <ClInclude Include="..\..\..\src\jstd\support\SSEHelper.h" />
+    <ClInclude Include="..\..\..\src\jstd\support\x86_intrin.h" />
+    <ClInclude Include="..\..\..\src\jstd\traits\has_member.h" />
+    <ClInclude Include="..\..\..\src\jstd\traits\type_traits.h" />
+    <ClInclude Include="..\..\..\src\jstd\utility\integer_sequence.h" />
+    <ClInclude Include="..\..\..\src\jstd\utility\utility.h" />
+    <ClInclude Include="..\..\..\src\jstd\version.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\jstd\basic\assert.c" />
     <ClCompile Include="..\..\..\src\jstd\dll_main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

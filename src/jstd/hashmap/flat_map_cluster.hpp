@@ -52,15 +52,9 @@
 #pragma once
 
 #include <cstdint>
-
-// For SSE2, SSE3, SSSE3, SSE 4.1, AVX, AVX2
-#if defined(_MSC_VER)
-#include <intrin.h>
-#else
-#include <x86intrin.h>
-#endif //_MSC_VER
-
 #include <assert.h>
+
+#include "jstd/support/BitVec.h"
 
 #if defined(_MSC_VER)
 #include <xatomic.h>
@@ -99,15 +93,19 @@ public:
     typedef std::uint8_t value_type;
     typedef std::uint8_t hash_type;
 
-    cluster_meta_ctrl(hash_type value = kEmptySlot) : value_(value) {}
+    cluster_meta_ctrl(value_type value = kEmptySlot) : value_(value) {}
     ~cluster_meta_ctrl() {}
 
     static inline value_type hash_bits(std::size_t hash) {
-        return static_cast<value_type>(hash & (std::size_t)kHashMask);
+        return static_cast<value_type>(hash & static_cast<std::size_t>(kHashMask));
+    }
+
+    static inline std::size_t hash_bits64(std::size_t hash) {
+        return (hash & static_cast<std::size_t>(kHashMask));
     }
 
     static inline value_type overflow_bits(std::size_t hash) {
-        return static_cast<value_type>(hash & (std::size_t)kOverflowMask);
+        return static_cast<value_type>(hash & static_cast<std::size_t>(kOverflowMask));
     }
 
     inline bool is_empty() const {
@@ -132,12 +130,21 @@ public:
     }
 
     bool is_equals(hash_type hash) {
-        return (hash == this->value);
+        value_type hash8 = hash_bits(this->value);
+        return (hash == hash8);
     }
 
     bool is_equals64(std::size_t hash) {
-        value_type hash8 = hash_bits(hash);
-        return (hash8 == this->value);
+        std::size_t hash64 = hash_bits64(this->value);
+        return (hash == hash64);
+    }
+
+    inline value_type get_hash() const {
+        return hash_bits(this->value);
+    }
+
+    inline value_type get_value() const {
+        return this->value;
     }
 
     inline void set_empty() {
@@ -155,6 +162,10 @@ public:
     inline void set_overflow() {
         assert(this->value != kEmptySlot);
         this->value &= kOverflowMask;
+    }
+
+    inline void set_value(hash_type value) {
+        this->value = value;
     }
 
 private:
@@ -223,6 +234,18 @@ public:
         assert(pos < kSlotCount);
         ctrl_type * ctrl = &slot[pos];
         return ctrl->is_overflow_strict();
+    }
+
+    bool is_equals(std::size_t pos, hash_type hash) {
+        assert(pos < kSlotCount);
+        ctrl_type * ctrl = &slot[pos];
+        return ctrl->is_equals(hash);
+    }
+
+    bool is_equals64(std::size_t pos, std::size_t hash) {
+        assert(pos < kSlotCount);
+        ctrl_type * ctrl = &slot[pos];
+        return ctrl->is_equals64(hash);
     }
 
     inline void set_empty(std::size_t pos) {

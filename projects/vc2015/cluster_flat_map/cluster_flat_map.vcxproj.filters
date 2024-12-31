@@ -18,6 +18,27 @@
     <Filter Include="src\jstd\hashmap\detail">
       <UniqueIdentifier>{b61a9005-2b5d-4b9a-83e0-4296ee8e098a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\jstd\traits">
+      <UniqueIdentifier>{9bd883d7-0bcf-4314-be9c-238a34e45eb0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jstd\utility">
+      <UniqueIdentifier>{69506f7c-7897-4354-ae92-f8810965274f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jstd\basic">
+      <UniqueIdentifier>{c9e1868d-ba90-4579-a488-e935860cde9b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jstd\config">
+      <UniqueIdentifier>{b60f9bba-a39c-42b2-b288-ba2a3410965d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jstd\support">
+      <UniqueIdentifier>{5b3df705-4cc9-4312-8ac2-20a69db574cc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jstd\hasher">
+      <UniqueIdentifier>{d615d843-ca07-45d2-87f9-371dc1d57af5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jstd\basic\msvc">
+      <UniqueIdentifier>{d32a7dad-df74-4e4e-ad07-7e0e2439ea96}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\jstd\hashmap\cluster_flat_map.hpp">
@@ -38,10 +59,127 @@
     <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_cluster.hpp">
       <Filter>src\jstd\hashmap</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\assert.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\compiler.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\export.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\inttypes.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\macros.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\platform.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\stddef.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\stdint.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\stdsize.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\unistd.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\vld.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\vld_def.h">
+      <Filter>src\jstd\basic</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\msvc\inttypes.h">
+      <Filter>src\jstd\basic\msvc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\msvc\stdbool.h">
+      <Filter>src\jstd\basic\msvc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\basic\msvc\stdint.h">
+      <Filter>src\jstd\basic\msvc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\config\config.h">
+      <Filter>src\jstd\config</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\config\config_cxx.h">
+      <Filter>src\jstd\config</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\config\config_hw.h">
+      <Filter>src\jstd\config</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\config\config_hw_detect.h">
+      <Filter>src\jstd\config</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\config\config_jstd.h">
+      <Filter>src\jstd\config</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\config\config_post.h">
+      <Filter>src\jstd\config</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\config\config_pre.h">
+      <Filter>src\jstd\config</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\version.h">
+      <Filter>src\jstd</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\support\BitUtils.h">
+      <Filter>src\jstd\support</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\support\BitVec.h">
+      <Filter>src\jstd\support</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\support\CPUPrefetch.h">
+      <Filter>src\jstd\support</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\support\Power2.h">
+      <Filter>src\jstd\support</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\support\SSEHelper.h">
+      <Filter>src\jstd\support</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\support\x86_intrin.h">
+      <Filter>src\jstd\support</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\traits\has_member.h">
+      <Filter>src\jstd\traits</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\traits\type_traits.h">
+      <Filter>src\jstd\traits</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\utility\integer_sequence.h">
+      <Filter>src\jstd\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\utility\utility.h">
+      <Filter>src\jstd\utility</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hasher\fnv1a.h">
+      <Filter>src\jstd\hasher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hasher\hash_crc32.h">
+      <Filter>src\jstd\hasher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hasher\hash_helper.h">
+      <Filter>src\jstd\hasher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hasher\hashes.h">
+      <Filter>src\jstd\hasher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hasher\sha1.h">
+      <Filter>src\jstd\hasher</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jstd\dll_main.cpp">
       <Filter>src\jstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jstd\basic\assert.c">
+      <Filter>src\jstd\basic</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

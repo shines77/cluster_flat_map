@@ -51,6 +51,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 namespace jstd {
 
 template <typename Key, typename Value>
@@ -69,6 +71,60 @@ public:
     typedef value_type                                      element_type;
 
     typedef flat_map_type_policy<Key, Value>                this_type;
+
+    static value_type & value_from(element_type & x) {
+        return x;
+    }
+
+    template <typename K, typename V>
+    static raw_key_type const & extract(std::pair<K, V> const & kv) {
+        return kv.first;
+    }
+
+    static moved_type move(init_type & x) {
+        return { std::move(x.first), std::move(x.second) };
+    }
+
+    static moved_type move(element_type & x) {
+        // TODO: we probably need to launder here
+        return { std::move(const_cast<raw_key_type &>(x.first)),
+                 std::move(const_cast<raw_mapped_type &>(x.second)) };
+    }
+
+    template <typename Allocator, typename ... Args>
+    static void construct(Allocator & al, init_type * p, Args &&... args) {
+        constructibility_checker::check(al, p, std::forward<Args>(args)...);
+        std::allocator_traits<jstd::remove_cvref_t<decltype(al)>>::construct(al, p, std::forward<Args>(args)...);
+    }
+
+    template <typename Allocator, typename ... Args>
+    static void construct(Allocator & al, value_type * p, Args&&... args)
+    {
+        constructibility_checker::check(al, p, std::forward<Args>(args)...);
+        std::allocator_traits<jstd::remove_cvref_t<decltype(al)>>::construct(al, p, std::forward<Args>(args)...);
+    }
+
+    template <typename Allocator, typename ... Args>
+    static void construct(Allocator & al, key_type * p, Args&&... args)
+    {
+        constructibility_checker::check(al, p, std::forward<Args>(args)...);
+        std::allocator_traits<jstd::remove_cvref_t<decltype(al)>>::construct(al, p, std::forward<Args>(args)...);
+    }
+
+    template <typename Allocator>
+    static void destroy(Allocator & al, init_type * p) noexcept {
+        std::allocator_traits<jstd::remove_cvref_t<decltype(al)>>::destroy(al, p);
+    }
+
+    template <typename Allocator>
+    static void destroy(Allocator & al, value_type * p) noexcept {
+        std::allocator_traits<jstd::remove_cvref_t<decltype(al)>>::destroy(al, p);
+    }
+
+    template <typename Allocator>
+    static void destroy(Allocator & al, key_type * p) noexcept {
+        std::allocator_traits<jstd::remove_cvref_t<decltype(al)>>::destroy(al, p);
+    }
 };
 
 } // namespace jstd
