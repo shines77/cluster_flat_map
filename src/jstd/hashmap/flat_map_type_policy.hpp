@@ -46,12 +46,14 @@
 
 ************************************************************************************/
 
-#ifndef JSTD_HASHMAP_CLUSTER_FLAT_TABLE_HPP
-#define JSTD_HASHMAP_CLUSTER_FLAT_TABLE_HPP
+#ifndef JSTD_HASHMAP_FLAT_MAP_TYPE_POLICY_HPP
+#define JSTD_HASHMAP_FLAT_MAP_TYPE_POLICY_HPP
 
 #pragma once
 
 #include <type_traits>
+
+#include "jstd/hashmap/map_types_constructibility.hpp"
 
 namespace jstd {
 
@@ -71,6 +73,8 @@ public:
     typedef value_type                                      element_type;
 
     typedef flat_map_type_policy<Key, Value>                this_type;
+
+    using constructibility_checker = flat_map_types_constructibility<this_type>;
 
     static value_type & value_from(element_type & x) {
         return x;
@@ -129,4 +133,4 @@ public:
 
 } // namespace jstd
 
-#endif // JSTD_HASHMAP_CLUSTER_FLAT_TABLE_HPP
+#endif // JSTD_HASHMAP_FLAT_MAP_TYPE_POLICY_HPP

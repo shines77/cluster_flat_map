@@ -39,6 +39,9 @@
     <Filter Include="src\jstd\basic\msvc">
       <UniqueIdentifier>{d32a7dad-df74-4e4e-ad07-7e0e2439ea96}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\jstd\string">
+      <UniqueIdentifier>{54b52a40-e184-488d-b27d-ae4b4e183090}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\jstd\hashmap\cluster_flat_map.hpp">
@@ -172,6 +175,45 @@
     </ClInclude>
     <ClInclude Include="..\..\..\src\jstd\hasher\sha1.h">
       <Filter>src\jstd\hasher</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\map_types_constructibility.hpp">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\char_traits.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\formatter.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\string_def.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\string_helper.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\string_iterator.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\string_libc.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\string_stl.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\string_traits.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\string_utils.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\string_view.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\string\string_view_array.h">
+      <Filter>src\jstd\string</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\iterator.h">
+      <Filter>src\jstd</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

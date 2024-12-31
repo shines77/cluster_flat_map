@@ -6,6 +6,8 @@
 #pragma once
 #endif
 
+#include <cstdio>
+#include <iostream>
 #include <cstdint>
 #include <cstddef>
 #include <cstdbool>
@@ -17,7 +19,7 @@
 
 #include "jstd/basic/stddef.h"
 #include "jstd/utility/integer_sequence.h"
-#include "jstd/type_traits.h"
+#include "jstd/traits/type_traits.h"
 
 namespace jstd {
 namespace detail {

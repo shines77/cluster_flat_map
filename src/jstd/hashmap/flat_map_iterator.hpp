@@ -312,11 +312,11 @@ public:
         return (lhs.slot_ != rhs.slot());
     }
 
-    friend bool operator == (const opp_fflat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
+    friend bool operator == (const opp_flat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
         return (lhs.slot_ == rhs.slot());
     }
 
-    friend bool operator != (const opp_fflat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
+    friend bool operator != (const opp_flat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
         return (lhs.slot_ != rhs.slot());
     }
 

@@ -89,8 +89,8 @@ public:
     typedef std::intptr_t                       ssize_type;
     typedef std::ptrdiff_t                      difference_type;
 
-    typedef Key                                 key_type;
-    typedef Value                               mapped_type;
+    typedef typename type_policy::key_type      key_type;
+    typedef typename type_policy::mapped_type   mapped_type;
     typedef typename type_policy::value_type    value_type;
     typedef typename type_policy::init_type     init_type;
     typedef Hash                                hasher;
@@ -203,9 +203,9 @@ private:
 public:
     cluster_flat_table() : cluster_flat_table(kDefaultCapacity) {}
 
-    explicit cluster_flat_map(size_type capacity, hasher const & hash = hasher(),
-                              key_equal const & pred = key_equal(),
-                              allocator_type const & allocator = allocator_type())
+    explicit cluster_flat_table(size_type capacity, hasher const & hash = hasher(),
+                                key_equal const & pred = key_equal(),
+                                allocator_type const & allocator = allocator_type())
         : groups_(nullptr), slots_(nullptr), slot_size_(0), slot_mask_(static_cast<size_type>(capacity - 1)),
           slot_threshold_(calcDefaultLoadFactor(capacity)), mlf_(kDefaultMaxLoadFactor) {
     }
@@ -478,12 +478,12 @@ public:
     /// insert_or_assign(key, value)
     ///
     template <typename MappedT>
-    std::pair<iterator, bool> insert_or_assign(const Key & key, MappedT && value) {
+    std::pair<iterator, bool> insert_or_assign(const key_type & key, MappedT && value) {
         return this->emplace_impl<true>(key, std::forward<MappedT>(value));
     }
 
     template <typename MappedT>
-    std::pair<iterator, bool> insert_or_assign(Key && key, MappedT && value) {
+    std::pair<iterator, bool> insert_or_assign(key_type && key, MappedT && value) {
         return this->emplace_impl<true>(std::move(key), std::forward<MappedT>(value));
     }
 
@@ -493,12 +493,12 @@ public:
     }
 
     template <typename MappedT>
-    iterator insert_or_assign(const_iterator hint, const Key & key, MappedT && value) {
+    iterator insert_or_assign(const_iterator hint, const key_type & key, MappedT && value) {
         return this->emplace_impl<true>(key, std::forward<MappedT>(value))->first;
     }
 
     template <typename MappedT>
-    iterator insert_or_assign(const_iterator hint, Key && key, MappedT && value) {
+    iterator insert_or_assign(const_iterator hint, key_type && key, MappedT && value) {
         return this->emplace_impl<true>(std::move(key), std::forward<MappedT>(value))->first;
     }
 
@@ -524,12 +524,12 @@ public:
     /// try_emplace(key, args...)
     ///
     template <typename ... Args>
-    std::pair<iterator, bool> try_emplace(const Key & key, Args && ... args) {
+    std::pair<iterator, bool> try_emplace(const key_type & key, Args && ... args) {
         return this->try_emplace_impl(key, std::forward<Args>(args)...);
     }
 
     template <typename ... Args>
-    std::pair<iterator, bool> try_emplace(Key && key, Args && ... args) {
+    std::pair<iterator, bool> try_emplace(key_type && key, Args && ... args) {
         return this->try_emplace_impl(std::move(key), std::forward<Args>(args)...);
     }
 
@@ -539,12 +539,12 @@ public:
     }
 
     template <typename ... Args>
-    std::pair<iterator, bool> try_emplace(const_iterator hint, const Key & key, Args && ... args) {
+    std::pair<iterator, bool> try_emplace(const_iterator hint, const key_type & key, Args && ... args) {
         return this->try_emplace_impl(key, std::forward<Args>(args)...);
     }
 
     template <typename ... Args>
-    std::pair<iterator, bool> try_emplace(const_iterator hint, Key && key, Args && ... args) {
+    std::pair<iterator, bool> try_emplace(const_iterator hint, key_type && key, Args && ... args) {
         return this->try_emplace_impl(std::move(key), std::forward<Args>(args)...);
     }
 
@@ -2080,8 +2080,8 @@ InsertOrGrow_Start:
             assert (is_exists == kNeedGrow);
             this->grow_if_necessary();
             return this->emplace(std::piecewise_construct,
-                                    std::forward_as_tuple(std::forward<KeyT>(key)),
-                                    std::forward_as_tuple(std::forward<Args>(args)...));
+                                 std::forward_as_tuple(std::forward<KeyT>(key)),
+                                 std::forward_as_tuple(std::forward<Args>(args)...));
         }
     }
 
@@ -2121,15 +2121,16 @@ InsertOrGrow_Start:
         }
     }
 
+#if 1
     template <bool AlwaysUpdate, typename First, typename std::enable_if<
               (!jstd::is_same_ex<First, value_type>::value &&
                !std::is_constructible<value_type, First &&>::value) &&
-              (!jstd::is_same_ex<First, mutable_value_type>::value &&
-               !std::is_constructible<mutable_value_type, First &&>::value) &&
+              (!jstd::is_same_ex<First, init_type>::value &&
+               !std::is_constructible<init_type, First &&>::value) &&
               (!jstd::is_same_ex<First, std::piecewise_construct_t>::value) &&
               (!jstd::is_same_ex<First, key_type>::value &&
                !std::is_constructible<key_type, First &&>::value)>::type * = nullptr,
-              typename ... Args>
+                typename ... Args>
     std::pair<iterator, bool> emplace_impl(First && first, Args && ... args) {
         alignas(slot_type) unsigned char raw[sizeof(slot_type)];
         slot_type * tmp_slot = reinterpret_cast<slot_type *>(&raw);
@@ -2165,6 +2166,7 @@ InsertOrGrow_Start:
                 return this->emplace(std::move(tmp_slot->value));
         }
     }
+#endif
 
     ////////////////////////////////////////////////////////////////////////////////////////////
 

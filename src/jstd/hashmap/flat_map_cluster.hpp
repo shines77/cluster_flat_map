@@ -67,6 +67,7 @@
 
 namespace jstd {
 
+#if 0
 static inline
 __m128i _mm_setones_si128()
 {
@@ -82,6 +83,7 @@ __m256i _mm256_setones_si256()
     ones = _mm256_cmpeq_epi16(ones, ones);
     return ones;
 }
+#endif
 
 class cluster_meta_ctrl
 {
@@ -93,7 +95,7 @@ public:
     typedef std::uint8_t value_type;
     typedef std::uint8_t hash_type;
 
-    cluster_meta_ctrl(value_type value = kEmptySlot) : value_(value) {}
+    cluster_meta_ctrl(value_type value = kEmptySlot) : value(value) {}
     ~cluster_meta_ctrl() {}
 
     static inline value_type hash_bits(std::size_t hash) {

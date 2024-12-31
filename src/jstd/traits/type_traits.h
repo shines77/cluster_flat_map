@@ -99,14 +99,40 @@ template <typename... Ts>
 using void_t = typename make_void<Ts...>::type;
 
 //
+// some type_traits enhance
+//
+
+template <bool b, typename T>
+using enable_if_t = typename std::enable_if<b, T>::type;
+
+template <bool b, typename T1, typename T2>
+using conditional_t = typename std::conditional<b, T1, T2>::type;
+
+//
 // std::remove_xxxx<T> enhance
 //
+
+template <typename T>
+using remove_const_t = typename std::remove_const<T>::type;
+
+template <typename T>
+using remove_volatile_t = typename std::remove_volatile<T>::type;
+
+template <typename T>
+using remove_ref_t = typename std::remove_reference<T>::type;
+
+template <typename T>
+using remove_cv_t = typename std::remove_cv<T>::type;
+
 template <typename T>
 struct remove_cvref {
     typedef typename std::remove_cv<
                 typename std::remove_reference<T>::type
             >::type type;
 };
+
+template <typename T>
+using remove_cvref_t = typename remove_cvref<T>::type;
 
 template <typename T>
 struct remove_cvp_ref {
@@ -116,6 +142,9 @@ struct remove_cvp_ref {
                 >::type
             >::type type;
 };
+
+template <typename T>
+using remove_cvp_ref_t = typename remove_cvp_ref<T>::type;
 
 template <typename T>
 struct remove_cvrp_ext {
@@ -129,6 +158,9 @@ struct remove_cvrp_ext {
 };
 
 template <typename T>
+using remove_cvrp_ext_t = typename remove_cvrp_ext<T>::type;
+
+template <typename T>
 struct remove_all {
     typedef typename std::remove_all_extents<
                 typename std::remove_cv<
@@ -138,6 +170,9 @@ struct remove_all {
                 >::type
             >::type type;
 };
+
+template <typename T>
+using remove_all_t = typename remove_all<T>::type;
 
 template <typename T1, typename T2>
 struct is_same_ex : public std::is_same<typename remove_cvref<T1>::type,
