@@ -89,8 +89,8 @@ public:
     typedef Value                               mapped_type;
     typedef typename type_policy::value_type    value_type;
     typedef typename type_policy::init_type     init_type;
-    typedef Hash                                hasher_t;
-    typedef KeyEqual                            key_equal_t;
+    typedef Hash                                hasher;
+    typedef KeyEqual                            key_equal;
     typedef Allocator                           allocator_type;
 
     typedef value_type &                        reference;
@@ -118,23 +118,23 @@ public:
     ///
     cluster_flat_map() : cluster_flat_map(0) {}
 
-    explicit cluster_flat_map(size_type capacity, hasher_t const & hash = hasher_t(),
-                              key_equal_t const & pred = key_equal_t(),
+    explicit cluster_flat_map(size_type capacity, hasher const & hash = hasher(),
+                              key_equal const & pred = key_equal(),
                               allocator_type const & allocator = allocator_type())
         : table_(capacity, hash, pred, allocator) {
     }
 
     cluster_flat_map(size_type capacity, allocator_type const & allocator)
-        : cluster_flat_map(capacity, hasher_t(), key_equal_t(), allocator) {
+        : cluster_flat_map(capacity, hasher(), key_equal(), allocator) {
     }
 
-    cluster_flat_map(size_type capacity, hasher_t const & hash, allocator_type const & allocator)
-        : cluster_flat_map(capacity, hash, key_equal_t(), allocator) {
+    cluster_flat_map(size_type capacity, hasher const & hash, allocator_type const & allocator)
+        : cluster_flat_map(capacity, hash, key_equal(), allocator) {
     }
 
     template <typename InputIterator>
     cluster_flat_map(InputIterator first, InputIterator last, allocator_type const & allocator)
-        : cluster_flat_map(first, last, size_type(0), hasher_t(), key_equal_t(), allocator) {
+        : cluster_flat_map(first, last, size_type(0), hasher(), key_equal(), allocator) {
     }
 
     explicit cluster_flat_map(allocator_type const & allocator)
@@ -143,7 +143,7 @@ public:
 
     template <typename Iterator>
     cluster_flat_map(Iterator first, Iterator last, size_type capacity = 0,
-                     hasher_t const & hash = hasher_t(), key_equal_t const & pred = key_equal_t(),
+                     hasher const & hash = hasher(), key_equal const & pred = key_equal(),
                      allocator_type const & allocator = allocator_type())
         : cluster_flat_map(capacity, hash, pred, allocator) {
         this->insert(first, last);
@@ -151,13 +151,13 @@ public:
 
     template <typename Iterator>
     cluster_flat_map(Iterator first, Iterator last, size_type capacity, allocator_type const & allocator)
-        : cluster_flat_map(first, last, size, hasher_t(), key_equal_t(), allocator) {
+        : cluster_flat_map(first, last, size, hasher(), key_equal(), allocator) {
     }
 
     template <typename Iterator>
     cluster_flat_map(Iterator first, Iterator last, size_type capacity,
-                     hasher_t const & hash, allocator_type const & allocator)
-        : cluster_flat_map(first, last, size, hash, key_equal_t(), allocator) {
+                     hasher const & hash, allocator_type const & allocator)
+        : cluster_flat_map(first, last, size, hash, key_equal(), allocator) {
     }
 
     cluster_flat_map(cluster_flat_map const & other) : table_(other.table_) {
@@ -177,30 +177,45 @@ public:
     }
 
     cluster_flat_map(std::initializer_list<value_type> ilist,
-                     size_type capacity = 0, hasher_t const & hash = hasher_t(),
-                     key_equal_t const & pred = key_equal_t(),
+                     size_type capacity = 0, hasher const & hash = hasher(),
+                     key_equal const & pred = key_equal(),
                      allocator_type const & allocator = allocator_type())
         : cluster_flat_map(ilist.begin(), ilist.end(), size, hash, pred, allocator) {
     }
 
     cluster_flat_map(std::initializer_list<value_type> ilist, allocator_type const & allocator)
-        : cluster_flat_map(ilist, size_type(0), hasher_t(), key_equal_t(), allocator) {
+        : cluster_flat_map(ilist, size_type(0), hasher(), key_equal(), allocator) {
     }
 
     cluster_flat_map(std::initializer_list<value_type> init, size_type capacity,
                      allocator_type const & allocator)
-        : cluster_flat_map(init, size, hasher_t(), key_equal_t(), allocator) {
+        : cluster_flat_map(init, size, hasher(), key_equal(), allocator) {
     }
 
     cluster_flat_map(std::initializer_list<value_type> init, size_type capacity,
-                     hasher_t const & hash, allocator_type const & allocator)
-        : cluster_flat_map(init, size, hash, key_equal_t(), allocator) {
+                     hasher const & hash, allocator_type const & allocator)
+        : cluster_flat_map(init, size, hash, key_equal(), allocator) {
     }
 
     ~cluster_flat_map() = default;
 
+    ///
+    /// Observers
+    ///
     allocator_type get_allocator() const noexcept {
         return table_.get_allocator();
+    }
+
+    hasher hash_function() const noexcept {
+        return table_.hash_function();
+    }
+
+    key_equal key_eq() const noexcept {
+        return table_.key_eq();
+    }
+
+    static const char * name() noexcept {
+        return table_.name();
     }
 
     ///
@@ -223,16 +238,177 @@ public:
     size_type capacity() const noexcept { return table_.capacity(); }
     size_type max_size() const noexcept { return table_.max_size(); }
 
-    size_type bucket_count() const noexcept { return table_.bucket_count(); }
+    size_type slot_size() const { return table_.slot_size(); }
+    size_type slot_mask() const { return table_.slot_mask(); }
+    size_type slot_capacity() const { return table_.slot_capacity(); }
+    size_type slot_threshold() const { return table_.slot_threshold(); }
+
+    bool is_valid() const { return table_.is_valid(); }
+    bool is_empty() const { return table_.is_empty(); }
+
+    ///
+    /// Bucket interface
+    ///
+    size_type bucket_size(size_type n) const noexcept {
+        return table_.bucket_size(n);
+    }
+    size_type bucket_count() const noexcept {
+        return table_.bucket_count();
+    }
+    size_type max_bucket_count() const noexcept {
+        return table_.max_bucket_count();
+    }
+
+    size_type bucket(const key_type & key) const {
+        return table_.bucket(key);
+    }
+
+    ///
+    /// Hash policy
+    ///
+    double load_factor() const { return table_.load_factor(); }
+    double max_load_factor() const { return table_.max_load_factor(); }
+
+    ///
+    /// Hash policy
+    ///
+    void reserve(size_type new_capacity, bool read_only = false) {
+        table_.reserve(new_capacity, read_only);
+    }
+
+    void resize(size_type new_capacity, bool read_only = false) {
+        table_.resize(new_capacity, read_only);
+    }
+
+    void rehash(size_type new_capacity, bool read_only = false) {
+        table_.resize(new_capacity, read_only);
+    }
+
+    void shrink_to_fit(bool read_only = false) {
+        table_.shrink_to_fit(read_only);
+    }
+
+    ///
+    /// Lookup
+    ///
+    size_type count(const key_type & key) const {
+        return table_.count(key);
+    }
+
+    bool contains(const key_type & key) const {
+        return table_.contains(key);
+    }
+
+    ///
+    /// find(key)
+    ///
+    iterator find(const key_type & key) {
+        return table_.find(key);
+    }
+
+    const_iterator find(const key_type & key) const {
+        return table_.find(key);
+    }
+
+    template <typename KeyT>
+    iterator find(const KeyT & key) {
+        return table_.find(key);
+    }
+
+    template <typename KeyT>
+    const_iterator find(const KeyT & key) const {
+        return table_.find(key);
+    }
 
     ///
     /// Modifiers
     ///
-    void clear(bool need_destroy = false) noexcept { table_.clear(need_destroy); }
+    void clear(bool need_destroy = false) noexcept {
+        table_.clear(need_destroy);
+    }
 
-    template <typename InputIterator>
-    void insert(InputIterator first, InputIterator last) {
-        //
+    ///
+    /// insert(value)
+    ///
+    std::pair<iterator, bool> insert(const value_type & value) {
+        return table_.emplace(value);
+    }
+
+    std::pair<iterator, bool> insert(value_type && value) {
+        return table_.emplace(std::move(value));
+    }
+
+    template <typename P>
+    std::pair<iterator, bool> insert(P && value) {
+        return table_.emplace(std::forward<P>(value));
+    }
+
+    iterator insert(const_iterator hint, const value_type & value) {
+        return table_.emplace(hint, value);
+    }
+
+    iterator insert(const_iterator hint, value_type && value) {
+        return table_.emplace(hint, std::move(value));
+    }
+
+    template <typename P>
+    iterator insert(const_iterator hint, P && value) {
+        return table_.emplace(hint, std::forward<P>(value));
+    }
+
+    template <typename InputIter>
+    void insert(InputIter first, InputIter last) {
+        table_.insert(first, last);
+    }
+
+    void insert(std::initializer_list<value_type> ilist) {
+        table_.insert(ilist);
+    }
+
+    ///
+    /// emplace(args...)
+    ///
+    template <typename ... Args>
+    std::pair<iterator, bool> emplace(Args && ... args) {
+        return table_.emplace(std::forward<Args>(args)...);
+    }
+
+    template <typename ... Args>
+    iterator emplace_hint(const_iterator hint, Args && ... args) {
+        return table_.emplace(hint, std::forward<Args>(args)...);
+    }
+
+    ///
+    /// try_emplace(key, args...)
+    ///
+    template <typename ... Args>
+    std::pair<iterator, bool> try_emplace(const Key & key, Args && ... args) {
+        return table_.try_emplace(key, std::forward<Args>(args)...);
+    }
+
+    template <typename ... Args>
+    std::pair<iterator, bool> try_emplace(Key && key, Args && ... args) {
+        return table_.try_emplace(std::move(key), std::forward<Args>(args)...);
+    }
+
+    template <typename KeyT, typename ... Args>
+    std::pair<iterator, bool> try_emplace(KeyT && key, Args && ... args) {
+        return table_.try_emplace(std::forward<KeyT>(key), std::forward<Args>(args)...);
+    }
+
+    template <typename ... Args>
+    std::pair<iterator, bool> try_emplace(const_iterator hint, const Key & key, Args && ... args) {
+        return table_.try_emplace(hint, key, std::forward<Args>(args)...);
+    }
+
+    template <typename ... Args>
+    std::pair<iterator, bool> try_emplace(const_iterator hint, Key && key, Args && ... args) {
+        return table_.try_emplace(hint, std::move(key), std::forward<Args>(args)...);
+    }
+
+    template <typename KeyT, typename ... Args>
+    std::pair<iterator, bool> try_emplace(const_iterator hint, KeyT && key, Args && ... args) {
+        return table_.try_emplace(hint, std::forward<KeyT>(key), std::forward<Args>(args)...);
     }
 };
 

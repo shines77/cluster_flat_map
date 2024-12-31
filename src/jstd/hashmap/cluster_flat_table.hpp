@@ -227,8 +227,12 @@ public:
     }
 
     ///
-    /// Functions
+    /// Observers
     ///
+    allocator_type get_allocator() const noexcept {
+        return allocator_;
+    }
+
     hasher hash_function() const noexcept {
         return this->hasher_;
     }
@@ -237,11 +241,7 @@ public:
         return this->key_equal_;
     }
 
-    allocator_type get_allocator() const noexcept {
-        return allocator_;
-    }
-
-    static const char * name() {
+    static const char * name() noexcept {
         return "jstd::cluster_flat_map";
     }
 
@@ -272,6 +272,9 @@ public:
     size_type slot_capacity() const { return (this->slot_mask_ + 1); }
     size_type slot_threshold() const { return this->slot_threshold_; }
 
+    bool is_valid() const { return (this->groups() != nullptr); }
+    bool is_empty() const { return (this->size() == 0); }
+
     ///
     /// Bucket interface
     ///
@@ -289,9 +292,6 @@ public:
     size_type group_capacity() const {
         return (this->slot_capacity() / kGroupSize);
     }
-
-    bool is_valid() const { return (this->groups() != nullptr); }
-    bool is_empty() const { return (this->size() == 0); }
 
     ///
     /// Hash policy
@@ -460,7 +460,7 @@ public:
 
     template <typename P>
     iterator insert(const_iterator hint, P && value) {
-        return this->emplace_impl<false>(std::forward<P>(value));
+        return this->emplace_impl<false>(std::forward<P>(value)).first;
     }
 
     template <typename InputIter>
