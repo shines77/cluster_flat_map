@@ -77,8 +77,8 @@ public:
                                                      const_value_type>::type;
     using opp_flat_map_iterator = flat_map_iterator<HashMap, opp_value_type, IsIndirectKV>;
 
-    using size_type = std::size_t;
-    using difference_type = std::ptrdiff_t;
+    using size_type = typename HashMap::size_type;
+    using difference_type = typename HashMap::difference_type;
 
 private:
     const hashmap_type * owner_;
@@ -148,7 +148,7 @@ public:
         do {
             ++(this->index_);
             ++ctrl;
-        } while (ctrl->is_empty_slot() && (this->index_ < max_index));
+        } while (ctrl->is_empty() && (this->index_ < max_index));
         return *this;
     }
 
@@ -163,7 +163,7 @@ public:
         while (this->index_ != 0) {
             --(this->index_);
             --ctrl;
-            if (!ctrl->is_empty_slot())
+            if (!ctrl->is_empty())
                 break;
         }
         return *this;
@@ -216,7 +216,7 @@ public:
     }
 
     ctrl_type * ctrl() {
-        ctrl_type * _ctrl = const_cast<hashmap_type *>(this->owner_)->ctrl_at(this->index);
+        ctrl_type * _ctrl = const_cast<ctrl_type *>(this->owner_)->ctrl_at(this->index);
         return _ctrl;
     }
 
@@ -227,7 +227,7 @@ public:
 
     slot_type * slot() {
         const slot_type * _slot = this->owner_->slot_at(this->index_);
-        return const_cast<hashmap_type *>(_slot);
+        return const_cast<slot_type *>(_slot);
     }
 
     const slot_type * slot() const {
@@ -258,8 +258,8 @@ public:
                                                      const_value_type>::type;
     using opp_flat_map_iterator = flat_map_iterator<HashMap, opp_value_type, true>;
 
-    using size_type = std::size_t;
-    using difference_type = std::ptrdiff_t;
+    using size_type = typename HashMap::size_type;
+    using difference_type = typename HashMap::difference_type;
 
 private:
     const slot_type * slot_;

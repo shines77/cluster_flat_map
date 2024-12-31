@@ -553,6 +553,71 @@ public:
         return this->try_emplace_impl(std::forward<KeyT>(key), std::forward<Args>(args)...);
     }
 
+    ///
+    /// For iterator
+    ///
+    inline size_type next_index(size_type index) const noexcept {
+        assert(index < this->slot_capacity());
+        return ((index + 1) & this->slot_mask_);
+    }
+
+    inline size_type next_index(size_type index, size_type slot_mask) const noexcept {
+        assert(index < this->slot_capacity());
+        return ((index + 1) & slot_mask);
+    }
+
+    inline ctrl_type * ctrl_at(size_type slot_index) noexcept {
+        assert(slot_index <= this->slot_capacity());
+        return (this->ctrls() + std::ptrdiff_t(slot_index));
+    }
+
+    inline const ctrl_type * ctrl_at(size_type slot_index) const noexcept {
+        assert(slot_index <= this->slot_capacity());
+        return (this->ctrls() + std::ptrdiff_t(slot_index));
+    }
+
+    inline group_type group_at(size_type slot_index) noexcept {
+        assert(slot_index < this->slot_capacity());
+        size_type group_idx = slot_index / kGroupSize;
+        return (this->groups() + std::ptrdiff_t(group_idx));
+    }
+
+    inline const group_type group_at(size_type slot_index) const noexcept {
+        assert(slot_index < this->slot_capacity());
+        size_type group_idx = slot_index / kGroupSize;
+        return (this->groups() + std::ptrdiff_t(group_idx));
+    }
+
+    inline slot_type * slot_at(size_type slot_index) noexcept {
+        assert(slot_index <= this->slot_capacity());
+        return (this->slots() + std::ptrdiff_t(slot_index));
+    }
+
+    inline const slot_type * slot_at(size_type slot_index) const noexcept {
+        assert(slot_index <= this->slot_capacity());
+        return (this->slots() + std::ptrdiff_t(slot_index));
+    }
+
+    inline slot_type * slot_at(ctrl_type * ctrl) noexcept {
+        size_type slot_index;
+        if (kIsIndirectKV)
+            slot_index = ctrl->get_index();
+        else
+            slot_index = this->index_of(ctrl);
+        assert(slot_index <= this->slot_capacity());
+        return (this->slots() + std::ptrdiff_t(slot_index));
+    }
+
+    inline const slot_type * slot_at(const ctrl_type * ctrl) const noexcept {
+        size_type slot_index;
+        if (kIsIndirectKV)
+            slot_index = ctrl->get_index();
+        else
+            slot_index = this->index_of(ctrl);
+        assert(slot_index <= this->slot_capacity());
+        return (this->slots() + std::ptrdiff_t(slot_index));
+    }
+
 private:
     JSTD_FORCED_INLINE
     size_type calc_capacity(size_type init_capacity) const noexcept {
@@ -725,68 +790,6 @@ private:
         else
             ctrl_hash = std::uint8_t(0);
         return ctrl_hash;
-    }
-
-    inline size_type next_index(size_type index) const noexcept {
-        assert(index < this->slot_capacity());
-        return ((index + 1) & this->slot_mask_);
-    }
-
-    inline size_type next_index(size_type index, size_type slot_mask) const noexcept {
-        assert(index < this->slot_capacity());
-        return ((index + 1) & slot_mask);
-    }
-
-    inline ctrl_type * ctrl_at(size_type slot_index) noexcept {
-        assert(slot_index <= this->slot_capacity());
-        return (this->ctrls() + std::ptrdiff_t(slot_index));
-    }
-
-    inline const ctrl_type * ctrl_at(size_type slot_index) const noexcept {
-        assert(slot_index <= this->slot_capacity());
-        return (this->ctrls() + std::ptrdiff_t(slot_index));
-    }
-
-    inline group_type group_at(size_type slot_index) noexcept {
-        assert(slot_index < this->slot_capacity());
-        size_type group_idx = slot_index / kGroupSize;
-        return (this->groups() + std::ptrdiff_t(group_idx));
-    }
-
-    inline const group_type group_at(size_type slot_index) const noexcept {
-        assert(slot_index < this->slot_capacity());
-        size_type group_idx = slot_index / kGroupSize;
-        return (this->groups() + std::ptrdiff_t(group_idx));
-    }
-
-    inline slot_type * slot_at(size_type slot_index) noexcept {
-        assert(slot_index <= this->slot_capacity());
-        return (this->slots() + std::ptrdiff_t(slot_index));
-    }
-
-    inline const slot_type * slot_at(size_type slot_index) const noexcept {
-        assert(slot_index <= this->slot_capacity());
-        return (this->slots() + std::ptrdiff_t(slot_index));
-    }
-
-    inline slot_type * slot_at(ctrl_type * ctrl) noexcept {
-        size_type slot_index;
-        if (kIsIndirectKV)
-            slot_index = ctrl->get_index();
-        else
-            slot_index = this->index_of(ctrl);
-        assert(slot_index <= this->slot_capacity());
-        return (this->slots() + std::ptrdiff_t(slot_index));
-    }
-
-    inline const slot_type * slot_at(const ctrl_type * ctrl) const noexcept {
-        size_type slot_index;
-        if (kIsIndirectKV)
-            slot_index = ctrl->get_index();
-        else
-            slot_index = this->index_of(ctrl);
-        assert(slot_index <= this->slot_capacity());
-        return (this->slots() + std::ptrdiff_t(slot_index));
     }
 
     size_type index_of(iterator pos) const {
