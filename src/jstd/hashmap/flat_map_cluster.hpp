@@ -90,17 +90,17 @@ public:
         return (hash == kEmptySlot);
     }
 
-    inline bool is_used(std::size_t pos) const {
+    inline bool is_used() const {
         value_type hash = hash_bits(this->value);
         return (hash != kEmptySlot);
     }
 
-    inline bool is_overflow(std::size_t pos) const {
+    inline bool is_overflow() const {
         value_type overflow = overflow_bits(this->value);
         return (overflow != 0);
     }
 
-    inline bool is_overflow_strict(std::size_t pos) const {
+    inline bool is_overflow_strict() const {
         value_type overflow = overflow_bits(this->value);
         value_type hash = hash_bits(this->value);
         return ((overflow != 0) && (hash != kEmptySlot));

@@ -184,7 +184,9 @@ public:
     using slot_allocator_type = typename std::allocator_traits<allocator_type>::template rebind_alloc<slot_type>;
 
     using AllocTraits = std::allocator_traits<allocator_type>;
-    using SlotAlloc = typename std::allocator_traits<allocator_type>::template rebind_alloc<slot_type>;
+
+    using GroupAllocTraits = typename std::allocator_traits<allocator_type>::template rebind_traits<group_type>;
+    using CtrlAllocTraits = typename std::allocator_traits<allocator_type>::template rebind_traits<ctrl_type>;    
     using SlotAllocTraits = typename std::allocator_traits<allocator_type>::template rebind_traits<slot_type>;
 
     using hash_policy_t = typename hash_policy_selector<Hash>::type;
@@ -1133,7 +1135,7 @@ private:
         this->max_lookups_ = new_max_lookups;
 
         this->slots_ = new_slots;
-        if (initialize) {
+        if (Initialize) {
             assert(this->slot_size_ == 0);
         } else {
             this->slot_size_ = 0;
@@ -1190,7 +1192,7 @@ private:
                     ctrl_type * last_ctrl = old_ctrls + old_max_slot_capacity;
                     slot_type * old_slot = old_slots;
                     for (ctrl_type * ctrl = old_ctrls; ctrl != last_ctrl; ctrl++) {
-                        if (likely(ctrl->isUsed())) {
+                        if (likely(ctrl->is_used())) {
                             if (!kNeedStoreHash)
                                 this->insert_no_grow(old_slot);
                             else
@@ -1234,7 +1236,7 @@ private:
                 } else if (old_ctrls != default_empty_ctrls()) {
                     ctrl_type * last_ctrl = old_ctrls + old_max_slot_capacity;
                     for (ctrl_type * ctrl = old_ctrls; ctrl != last_ctrl; ctrl++) {
-                        if (likely(ctrl->isUsed())) {
+                        if (likely(ctrl->is_used())) {
                             size_type slot_index = ctrl->getIndex();
                             slot_type * old_slot = old_slots + slot_index;
                             this->indirect_insert_no_grow(old_slot, ctrl->getHash());
