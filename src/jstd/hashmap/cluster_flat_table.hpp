@@ -112,6 +112,7 @@ public:
     using this_type = cluster_flat_table<TypePolicy, Hash, KeyEqual, Allocator>;
 
     static constexpr bool kUseIndexSalt = false;
+    static constexpr bool kEnableExchange = true;
 
     static constexpr bool kIsTransparent = (detail::is_transparent<Hash>::value && detail::is_transparent<KeyEqual>::value);
     static constexpr bool kIsLayoutCompatible = jstd::is_layout_compatible_kv<K, V>::value;
@@ -120,6 +121,10 @@ public:
 
     using ctrl_type = cluster_meta_ctrl;
     using group_type = flat_map_cluster16<cluster_meta_ctrl>;
+
+    static constexpr std::uint8_t kHashMask     = ctrl_type::kHashMask;
+    static constexpr std::uint8_t kEmptySlot    = ctrl_type::kEmptySlot;
+    static constexpr std::uint8_t kOverflowMask = ctrl_type::kOverflowMask;
 
     static constexpr size_type kGroupSize = group_type::kGroupSize;
 

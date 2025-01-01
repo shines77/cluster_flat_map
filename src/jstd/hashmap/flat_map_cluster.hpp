@@ -145,7 +145,7 @@ public:
         this->value &= kOverflowMask;
     }
 
-    inline void set_value(hash_type value) {
+    inline void set_value(value_type value) {
         this->value = value;
     }
 
