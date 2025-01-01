@@ -165,7 +165,7 @@ public:
     static constexpr std::uint8_t kEmptySlot    = ctrl_type::kEmptySlot;
     static constexpr std::uint8_t kOverflowMask = ctrl_type::kOverflowMask;
 
-    static constexpr std::size_t kSlotCount = 16;
+    static constexpr std::size_t kGroupSize = 16;
 
     flat_map_cluster16() {}
     ~flat_map_cluster16() {}
@@ -173,82 +173,82 @@ public:
     void init() {
         if (kEmptySlot == 0b00000000) {
             __m128i zeros = _mm_setzero_si128();
-            _mm_store_si128(reinterpret_cast<__m128i *>(slot), zeros);
+            _mm_store_si128(reinterpret_cast<__m128i *>(ctrls), zeros);
         }
         else if (kEmptySlot == 0b11111111) {
             __m128i ones = _mm_setones_si128();
-            _mm_store_si128(reinterpret_cast<__m128i *>(slot), ones);
+            _mm_store_si128(reinterpret_cast<__m128i *>(ctrls), ones);
         }
         else {
             __m128i empty_bits = _mm_set1_epi8(kEmptySlot);
-            _mm_store_si128(reinterpret_cast<__m128i *>(slot), empty_bits);
+            _mm_store_si128(reinterpret_cast<__m128i *>(ctrls), empty_bits);
         }
     }
 
     inline __m128i _load_data() const {
-        return _mm_load_si128(reinterpret_cast<const __m128i *>(slot));
+        return _mm_load_si128(reinterpret_cast<const __m128i *>(ctrls));
     }
 
     inline bool is_empty(std::size_t pos) const {
-        assert(pos < kSlotCount);
-        ctrl_type * ctrl = &slot[pos];
+        assert(pos < kGroupSize);
+        ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_empty();
     }
 
     inline bool is_used(std::size_t pos) const {
-        assert(pos < kSlotCount);
-        ctrl_type * ctrl = &slot[pos];
+        assert(pos < kGroupSize);
+        ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_used();
     }
 
     inline bool is_overflow(std::size_t pos) const {
-        assert(pos < kSlotCount);
-        ctrl_type * ctrl = &slot[pos];
+        assert(pos < kGroupSize);
+        ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_overflow();
     }
 
     inline bool is_overflow_strict(std::size_t pos) const {
-        assert(pos < kSlotCount);
-        ctrl_type * ctrl = &slot[pos];
+        assert(pos < kGroupSize);
+        ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_overflow_strict();
     }
 
     bool is_equals(std::size_t pos, hash_type hash) {
-        assert(pos < kSlotCount);
-        ctrl_type * ctrl = &slot[pos];
+        assert(pos < kGroupSize);
+        ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_equals(hash);
     }
 
     bool is_equals64(std::size_t pos, std::size_t hash) {
-        assert(pos < kSlotCount);
-        ctrl_type * ctrl = &slot[pos];
+        assert(pos < kGroupSize);
+        ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_equals64(hash);
     }
 
     inline void set_empty(std::size_t pos) {
-        assert(pos < kSlotCount);
-        ctrl_type * ctrl = &slot[pos];
+        assert(pos < kGroupSize);
+        ctrl_type * ctrl = &ctrls[pos];
         ctrl->set_empty();
     }
 
     inline void set_hash(std::size_t pos, hash_type hash) {
-        assert(pos < kSlotCount);
-        ctrl_type * ctrl = &slot[pos];
+        assert(pos < kGroupSize);
+        ctrl_type * ctrl = &ctrls[pos];
         ctrl->set_hash(hash);
     }
 
     inline void set_hash64(std::size_t pos, std::size_t hash) {
-        assert(pos < kSlotCount);
-        ctrl_type * ctrl = &slot[pos];
+        assert(pos < kGroupSize);
+        ctrl_type * ctrl = &ctrls[pos];
         ctrl->set_hash64(hash);
     }
 
     inline void set_overflow(std::size_t pos) {
-        ctrl_type * ctrl = &slot[pos];
+        ctrl_type * ctrl = &ctrls[pos];
         ctrl->set_overflow();
     }
 
-    inline int match_empty_mask() const {
+    inline std::uint32_t match_empty() const {
         // Latency = 6
         __m128i ctrl_bits = _load_data();
         __COMPILER_BARRIER();
@@ -265,15 +265,39 @@ public:
         
         __m128i match_mask = _mm_cmpeq_epi8(_mm_and_si128(ctrl_bits, mask_bits), empty_bits);
         int mask = _mm_movemask_epi8(match_mask);
-        return mask;
+        return reinterpret_cast<std::uint32_t>(mask);
     }
 
-    inline int match_empty() const {
-        int mask = match_empty_mask();
-        return (mask & 0x7FFF);
+    inline std::uint32_t match_used() const {
+        // Latency = 6
+        __m128i ctrl_bits = _load_data();
+        __COMPILER_BARRIER();
+        __m128i mask_bits = _mm_set1_epi8(kHashMask);
+        __COMPILER_BARRIER();
+
+        __m128i empty_bits, match_mask;
+        if (kEmptySlot == 0b00000000) {
+            empty_bits = _mm_setzero_si128();
+            match_mask = _mm_cmpgt_epi8(_mm_and_si128(ctrl_bits, mask_bits), empty_bits);
+        }
+        else if (kEmptySlot == 0b11111111) {
+            empty_bits = _mm_setones_si128();
+            match_mask = _mm_cmplt_epi8(_mm_and_si128(ctrl_bits, mask_bits), empty_bits);
+        }
+        else {
+            empty_bits = _mm_set1_epi8(kEmptySlot);
+            match_mask = _mm_cmpeq_epi8(_mm_and_si128(ctrl_bits, mask_bits), empty_bits);
+        }
+        
+        __m128i match_mask = _mm_cmpgt_epi8(_mm_and_si128(ctrl_bits, mask_bits), empty_bits);
+        int mask = _mm_movemask_epi8(match_mask);
+        if (kEmptySlot != 0b00000000 && kEmptySlot != 0b11111111) {
+            mask = ~mask & 0xFFFF;
+        }
+        return reinterpret_cast<std::uint32_t>(mask);
     }
 
-    inline int match_hash_mask(hash_type hash) const {
+    inline std::uint32_t match_hash(hash_type hash) const {
         // Latency = 6
         __m128i ctrl_bits  = _load_data();
         __COMPILER_BARRIER();
@@ -282,16 +306,11 @@ public:
         __m128i hash_bits  = _mm_set1_epi8(hash);
         __m128i match_mask = _mm_cmpeq_epi8(_mm_and_si128(ctrl_bits, mask_bits), hash_bits);
         int mask = _mm_movemask_epi8(match_mask);
-        return mask;
-    }
-
-    inline int match_hash() const {
-        int mask = match_hash_mask();
-        return (mask & 0x7FFF);
+        return reinterpret_cast<std::uint32_t>(mask);
     }
 
 private:
-    alignas(16) ctrl_type slot[kSlotCount];
+    alignas(16) ctrl_type ctrls[kGroupSize];
 };
 
 } // namespace jstd

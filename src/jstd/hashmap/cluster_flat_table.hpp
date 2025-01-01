@@ -194,6 +194,7 @@ public:
 
 private:
     group_type *    groups_;
+    ctrl_type *     ctrls_;
     size_type       slot_size_;
     size_type       slot_mask_;     // capacity = slot_mask + 1
     size_type       slot_threshold_;
@@ -230,7 +231,7 @@ public:
     explicit cluster_flat_table(size_type capacity, hasher const & hash = hasher(),
                                 key_equal const & pred = key_equal(),
                                 allocator_type const & allocator = allocator_type())
-        : groups_(nullptr), slots_(nullptr), slot_size_(0), slot_mask_(static_cast<size_type>(capacity - 1)),
+        : groups_(nullptr), ctrls_(nullptr), slots_(nullptr), slot_size_(0), slot_mask_(static_cast<size_type>(capacity - 1)),
           slot_threshold_(calcDefaultLoadFactor(capacity)), mlf_(kDefaultMaxLoadFactor) {
     }
 
@@ -330,7 +331,7 @@ public:
     size_type size() const noexcept { return this->slot_size(); }
     size_type capacity() const noexcept { return this->slot_capacity(); }
     size_type max_size() const noexcept {
-        return std::numeric_limits<difference_type>::(max)() / sizeof(value_type);
+        return std::numeric_limits<difference_type>::max() / sizeof(value_type);
     }
 
     size_type slot_size() const { return this->slot_size_; }
@@ -685,6 +686,17 @@ public:
     }
 
 private:
+    static ctrl_type * default_empty_ctrls() {
+        alignas(16) static const ctrl_type s_empty_ctrls[16] = {
+            { kEmptySlot }, { kEmptySlot }, { kEmptySlot }, { kEmptySlot },
+            { kEmptySlot }, { kEmptySlot }, { kEmptySlot }, { kEmptySlot },
+            { kEmptySlot }, { kEmptySlot }, { kEmptySlot }, { kEmptySlot },
+            { kEmptySlot }, { kEmptySlot }, { kEmptySlot }, { kEmptySlot }
+        };
+
+        return const_cast<ctrl_type *>(&s_empty_ctrls[0]);
+    }
+
     JSTD_FORCED_INLINE
     size_type calc_capacity(size_type init_capacity) const noexcept {
         size_type new_capacity = (std::max)(init_capacity, kMinCapacity);
@@ -692,6 +704,10 @@ private:
             new_capacity = pow2::round_up<size_type, kMinCapacity>(new_capacity);
         }
         return new_capacity;
+    }
+
+    size_type calc_slot_threshold(size_type now_slot_capacity) const {
+        return (now_slot_capacity * this->mlf_ / kLoadFactorAmplify);
     }
 
     size_type calc_max_lookups(size_type new_capacity) const {
@@ -891,7 +907,7 @@ private:
     }
 
     size_type index_of(const ctrl_type * ctrl) const {
-        return this->index_of((ctrl_type *)ctrl);
+        return this->index_of(reinterpret_cast<ctrl_type *>(ctrl));
     }
 
     size_type index_of(slot_type * slot) const {
@@ -903,7 +919,7 @@ private:
     }
 
     size_type index_of(const slot_type * slot) const {
-        return this->index_of((slot_type *)slot);
+        return this->index_of(reinterpret_cast<slot_type *>(slot));
     }
 
     size_type index_of_ctrl(ctrl_type * ctrl) const {
@@ -915,7 +931,7 @@ private:
     }
 
     size_type index_of_ctrl(const ctrl_type * ctrl) const {
-        return this->index_of_ctrl((ctrl_type *)ctrl);
+        return this->index_of_ctrl(reinterpret_cast<ctrl_type *>(ctrl));
     }
 
     template <typename U>
@@ -958,7 +974,7 @@ private:
 
     void destroy_ctrls() noexcept {
         if (this->ctrls_ != this_type::default_empty_ctrls()) {
-            size_type max_ctrl_capacity = (this->group_capacity() + 1) * kGroupSize;
+            size_type max_ctrl_capacity = this->group_capacity() * kGroupSize;
 #if CLUSTER_USE_SEPARATE_SLOTS
             CtrlAllocTraits::deallocate(this->ctrl_allocator_, this->ctrls_, max_ctrl_capacity);
 #else
@@ -973,8 +989,7 @@ private:
     void clear_data() {
         // Note!!: clear_slots() need use this->ctrls()
         this->clear_slots();
-        this->clear_ctrls(this->ctrls(), this->slot_capacity(),
-                          this->max_lookups(), this->group_capacity());
+        this->clear_ctrls(this->ctrls(), this->slot_capacity());
     }
 
     JSTD_FORCED_INLINE
@@ -1005,10 +1020,9 @@ private:
     }
 
     JSTD_FORCED_INLINE
-    void clear_ctrls(ctrl_type * ctrls, size_type slot_capacity,
-                     size_type max_lookups, size_type group_count) {
+    void clear_ctrls(ctrl_type * ctrls, size_type slot_capacity) {
         ctrl_type * ctrl = ctrls;
-        ctrl_type * last_ctrl = ctrls + group_count * kGroupSize;
+        ctrl_type * last_ctrl = ctrls + slot_capacity;
         group_type * group = reinterpret_cast<group_type *>(ctrls);
         group_type * last_group = reinterpret_cast<group_type *>(last_ctrl);
         for (; group < last_group; ++group) {
@@ -1097,22 +1111,15 @@ private:
         auto hash_policy_setting = this->hash_policy_.calc_next_capacity(new_capacity);
         this->hash_policy_.commit(hash_policy_setting);
 #endif
-        size_type new_max_lookups = this->calc_max_lookups(new_capacity);
-        if (new_max_lookups < 16)
-            new_max_lookups = (std::max)(new_max_lookups * 2, kMinLookups);
-        else
-            new_max_lookups = (std::min)(new_max_lookups * 4, size_type(std::uint8_t(kMaxDist) + 1));
-        this->max_lookups_ = new_max_lookups;
-
-        size_type new_ctrl_capacity = new_capacity + new_max_lookups;
+        size_type new_ctrl_capacity = new_capacity;
         size_type new_group_count = (new_ctrl_capacity + (kGroupSize - 1)) / kGroupSize;
         assert(new_group_count > 0);
-        size_type ctrl_alloc_size = (new_group_count + 1) * kGroupSize;
+        size_type ctrl_alloc_size = new_group_count * kGroupSize;
 
 #if CLUSTER_USE_SEPARATE_SLOTS
         ctrl_type * new_ctrls = CtrlAllocTraits::allocate(this->ctrl_allocator_, ctrl_alloc_size);
 #else
-        size_type new_slot_capacity = new_capacity * this->mlf_ / kLoadFactorAmplify + new_max_lookups + 1;
+        size_type new_slot_capacity = new_capacity * this->mlf_ / kLoadFactorAmplify;
         size_type total_alloc_size = this->TotalAllocSize<kSlotAlignment>(ctrl_alloc_size,
                                            kIsIndirectKV ? new_slot_capacity : new_ctrl_capacity);
 
@@ -1122,7 +1129,7 @@ private:
         //Prefetch_Write_T2(new_ctrls);
 
         // Reset ctrls to default state
-        this->clear_ctrls(new_ctrls, new_capacity, new_max_lookups, new_group_count);
+        this->clear_ctrls(new_ctrls, new_capacity);
 
 #if CLUSTER_USE_SEPARATE_SLOTS
         slot_type * new_slots = SlotAllocTraits::allocate(this->slot_allocator_, new_ctrl_capacity);
@@ -1133,7 +1140,6 @@ private:
         Prefetch_Write_T2(new_slots);
 
         this->ctrls_ = new_ctrls;
-        this->max_lookups_ = new_max_lookups;
 
         this->slots_ = new_slots;
         if (Initialize) {
@@ -1142,7 +1148,7 @@ private:
             this->slot_size_ = 0;
         }
         this->slot_mask_ = new_capacity - 1;
-        this->slot_threshold_ = this->slot_threshold(new_capacity);
+        this->slot_threshold_ = this->calc_slot_threshold(new_capacity);
     }
 
     template <bool AllowShrink, bool AlwaysResize>
@@ -1159,7 +1165,7 @@ private:
             }
 
             ctrl_type * old_ctrls = this->ctrls();
-            size_type old_group_count = this->group_capacity();
+            group_type * old_groups = this->groups();
             size_type old_group_capacity = this->group_capacity();
 
             slot_type * old_slots = this->slots();
@@ -1172,39 +1178,36 @@ private:
             if (!kIsIndirectKV) {
                 // kIsIndirectKV = false
                 if (old_slot_capacity >= kGroupSize) {
-                    ctrl_type * ctrl = old_ctrls;
-                    ctrl_type * last_ctrl = old_ctrls + old_group_count * kGroupSize;
-                    group_type group(ctrl), last_group(last_ctrl);
+                    group_type * group = old_groups;
+                    group_type * last_group = old_groups + old_group_capacity;
                     slot_type * slot_base = old_slots;
 
                     for (; group < last_group; ++group) {
-                        std::uint32_t maskUsed = group.matchUsed();
-                        while (maskUsed != 0) {
-                            size_type pos = BitUtils::bsf32(maskUsed);
-                            maskUsed = BitUtils::clearLowBit32(maskUsed);
-                            size_type index = group.index(0, pos);
-                            slot_type * old_slot = slot_base + index;
+                        uint32_t used_mask = group->match_used();
+                        while (used_mask != 0) {
+                            std::uint32_t used_pos = BitUtils::bsf32(used_mask);
+                            used_mask = BitUtils::clearLowBit32(used_mask);
+                            slot_type * old_slot = slot_base + used_pos;
                             this->insert_no_grow(old_slot);
                             this->destroy_slot(old_slot);
                         }
                         slot_base += kGroupSize;
                     }
                 } else if (old_ctrls != default_empty_ctrls()) {
-                    ctrl_type * last_ctrl = old_ctrls + old_max_slot_capacity;
+                    ctrl_type * last_ctrl = old_ctrls + old_slot_capacity;
                     slot_type * old_slot = old_slots;
                     for (ctrl_type * ctrl = old_ctrls; ctrl != last_ctrl; ctrl++) {
                         if (likely(ctrl->is_used())) {
                             if (!kNeedStoreHash)
                                 this->insert_no_grow(old_slot);
                             else
-                                this->insert_no_grow(old_slot, ctrl->getHash());
+                                this->insert_no_grow(old_slot, ctrl->get_hash());
                             this->destroy_slot(old_slot);
                         }
                         old_slot++;
                     }
                 }
             } else {
-#if 1
                 // kIsIndirectKV = true
                 if (old_ctrls != default_empty_ctrls()) {
                     slot_type * last_slot = old_slots + old_slot_size;
@@ -1213,57 +1216,24 @@ private:
                         this->destroy_slot(old_slot);
                     }
                 }
-#else
-                // kIsIndirectKV = true
-                if (old_slot_capacity >= kGroupSize) {
-                    ctrl_type * ctrl = old_ctrls;
-                    ctrl_type * last_ctrl = old_ctrls + old_group_count * kGroupSize;
-                    group_type group(ctrl), last_group(last_ctrl);
-
-                    for (; group < last_group; ++group) {
-                        std::uint32_t maskUsed = group.matchUsed();
-                        while (maskUsed != 0) {
-                            size_type pos = BitUtils::bsf32(maskUsed);
-                            maskUsed = BitUtils::clearLowBit32(maskUsed);
-                            size_type index = group.index(0, pos);
-                            ctrl_type * ctrl = group.ctrl() + index;
-                            assert(!ctrl->is_empty());
-                            size_type slot_index = ctrl->getIndex();
-                            slot_type * old_slot = old_slots + slot_index;
-                            this->indirect_insert_no_grow(old_slot, ctrl->getHash());
-                            this->destroy_slot(old_slot);
-                        }
-                    }
-                } else if (old_ctrls != default_empty_ctrls()) {
-                    ctrl_type * last_ctrl = old_ctrls + old_max_slot_capacity;
-                    for (ctrl_type * ctrl = old_ctrls; ctrl != last_ctrl; ctrl++) {
-                        if (likely(ctrl->is_used())) {
-                            size_type slot_index = ctrl->getIndex();
-                            slot_type * old_slot = old_slots + slot_index;
-                            this->indirect_insert_no_grow(old_slot, ctrl->getHash());
-                            this->destroy_slot(old_slot);
-                        }
-                    }
-                }
-#endif
             }
 
             assert(this->slot_size() == old_slot_size);
 
             if (old_ctrls != this->default_empty_ctrls()) {
-                size_type old_max_ctrl_capacity = (old_group_count + 1) * kGroupSize;
-#if ROBIN_USE_SEPARATE_SLOTS
-                CtrlAllocTraits::deallocate(this->ctrl_allocator_, old_ctrls, old_max_ctrl_capacity);
+                size_type old_ctrl_capacity = old_group_capacity * kGroupSize;
+#if CLUSTER_USE_SEPARATE_SLOTS
+                CtrlAllocTraits::deallocate(this->ctrl_allocator_, old_ctrls, old_ctrl_capacity);
 #else
                 size_type total_alloc_size = this->TotalAllocSize<kSlotAlignment>(
-                                                   old_max_ctrl_capacity, old_max_slot_capacity);
+                                                   old_ctrl_capacity, old_slot_capacity);
                 CtrlAllocTraits::deallocate(this->ctrl_allocator_, old_ctrls, total_alloc_size);
 #endif
             }
 
-#if ROBIN_USE_SEPARATE_SLOTS
+#if CLUSTER_USE_SEPARATE_SLOTS
             if (old_slots != nullptr) {
-                SlotAllocTraits::deallocate(this->slot_allocator_, old_slots, old_max_slot_capacity);
+                SlotAllocTraits::deallocate(this->slot_allocator_, old_slots, old_slot_capacity);
             }
 #endif
         }
@@ -1400,11 +1370,11 @@ private:
         size_type slot_base = group_index * kGroupSize;
 
         for (;;) {
-            int match_mask = group->match_hash(ctrl_hash);
+            std::uint32_t match_mask = group->match_hash(ctrl_hash);
             if (match_mask != 0) {
                 do {
-                    uint32_t match_pos = BitUtils::bsf64(match_mask);
-                    uint64_t match_bit = BitUtils::ls1b64(match_mask);
+                    std::uint32_t match_pos = BitUtils::bsf32(match_mask);
+                    std::uint32_t match_bit = BitUtils::ls1b32(match_mask);
                     match_mask ^= match_bit;
 
                     size_type slot_pos = slot_base + match_pos;
@@ -1448,11 +1418,11 @@ private:
         size_type slot_base = group_index * kGroupSize;
 
         for (;;) {
-            int match_mask = group->match_hash(ctrl_hash);
+            std::uint32_t match_mask = group->match_hash(ctrl_hash);
             if (match_mask != 0) {
                 do {
-                    uint32_t match_pos = BitUtils::bsf64(match_mask);
-                    uint64_t match_bit = BitUtils::ls1b64(match_mask);
+                    std::uint32_t match_pos = BitUtils::bsf32(match_mask);
+                    std::uint32_t match_bit = BitUtils::ls1b32(match_mask);
                     match_mask ^= match_bit;
 
                     size_type slot_pos = slot_base + match_pos;
@@ -1511,11 +1481,11 @@ private:
         size_type slot_base = group_index * kGroupSize;
 
         for (;;) {
-            int match_mask = group->match_hash(ctrl_hash);
+            std::uint32_t match_mask = group->match_hash(ctrl_hash);
             if (match_mask != 0) {
                 do {
-                    uint32_t match_pos = BitUtils::bsf64(match_mask);
-                    uint64_t match_bit = BitUtils::ls1b64(match_mask);
+                    std::uint32_t match_pos = BitUtils::bsf32(match_mask);
+                    std::uint32_t match_bit = BitUtils::ls1b32(match_mask);
                     match_mask ^= match_bit;
 
                     size_type slot_pos = slot_base + match_pos;
@@ -1569,11 +1539,11 @@ private:
         size_type cltr_base = group_index * kGroupSize;
 
         for (;;) {
-            int match_mask = group->match_hash(ctrl_hash);
+            std::uint32_t match_mask = group->match_hash(ctrl_hash);
             if (match_mask != 0) {
                 do {
-                    uint32_t match_pos = BitUtils::bsf64(match_mask);
-                    uint64_t match_bit = BitUtils::ls1b64(match_mask);
+                    std::uint32_t match_pos = BitUtils::bsf32(match_mask);
+                    std::uint32_t match_bit = BitUtils::ls1b32(match_mask);
                     match_mask ^= match_bit;
 
                     size_type slot_pos = slot_base + match_pos;
