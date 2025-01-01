@@ -1399,10 +1399,10 @@ private:
         }
     };
 
-    template <typename T, bool isCompatibleLayout, bool isNoexceptMoveAssign>
+    template <typename T, bool isLayoutCompatible, bool isNoexceptMoveAssign>
     struct slot_adapter;
 
-    template <typename T /*, bool isCompatibleLayout, bool isNoexceptMoveAssign */>
+    template <typename T /*, bool isLayoutCompatible, bool isNoexceptMoveAssign */>
     struct slot_adapter<T, true, true> {
         typedef typename T::first_type                          first_type;
         typedef typename T::second_type                         second_type;
@@ -1453,7 +1453,7 @@ private:
         }
     };
 
-    template <typename T /* , bool isCompatibleLayout, bool isNoexceptMoveAssign */>
+    template <typename T /* , bool isLayoutCompatible, bool isNoexceptMoveAssign */>
     struct slot_adapter<T, true, false> {
         typedef typename T::first_type                          first_type;
         typedef typename T::second_type                         second_type;
@@ -1500,14 +1500,14 @@ private:
         }
     };
 
-    template <typename T /*, bool isCompatibleLayout, bool isNoexceptMoveAssign */>
+    template <typename T /*, bool isLayoutCompatible, bool isNoexceptMoveAssign */>
     struct slot_adapter<T, false, true> {
         typedef typename T::first_type                          first_type;
         typedef typename T::second_type                         second_type;
         typedef typename std::remove_const<first_type>::type    mutable_first_type;
 
         static mutable_first_type * mutable_key(T * value) {
-            // Still check for isCompatibleLayout so that we can avoid calling jstd::launder
+            // Still check for isLayoutCompatible so that we can avoid calling jstd::launder
             // unless necessary because it can interfere with optimizations.
             return jstd::launder(const_cast<mutable_first_type *>(std::addressof(value->first)));
         }
@@ -1554,14 +1554,14 @@ private:
         }
     };
 
-    template <typename T /*, bool isCompatibleLayout, bool isNoexceptMoveAssign */>
+    template <typename T /*, bool isLayoutCompatible, bool isNoexceptMoveAssign */>
     struct slot_adapter<T, false, false> {
         typedef typename T::first_type                          first_type;
         typedef typename T::second_type                         second_type;
         typedef typename std::remove_const<first_type>::type    mutable_first_type;
 
         static mutable_first_type * mutable_key(T * value) {
-            // Still check for isCompatibleLayout so that we can avoid calling jstd::launder
+            // Still check for isLayoutCompatible so that we can avoid calling jstd::launder
             // unless necessary because it can interfere with optimizations.
             return jstd::launder(const_cast<mutable_first_type *>(std::addressof(value->first)));
         }
@@ -1724,8 +1724,8 @@ private:
         const group_type * group = this->group_at(group_index);
         const group_type * last_group = this->last_group();
         
-        size_type skip_groups = 0;
         size_type slot_base = group_index * kGroupSize;
+        size_type skip_groups = 0;
 
         for (;;) {
             std::uint32_t match_mask = group->match_hash(ctrl_hash);
@@ -1751,6 +1751,7 @@ private:
             group++;
             if (group >= last_group) {
                 group = this->groups();
+                slot_base = 0;
             }
             skip_groups++;
             if (skip_groups > kSkipGroupsLimit) {
@@ -1772,8 +1773,8 @@ private:
         size_type group_pos = slot_index % kGroupSize;
         const group_type * group = this->group_at(group_index);
 
-        size_type skip_groups = 0;
         size_type slot_base = group_index * kGroupSize;
+        size_type skip_groups = 0;
 
         for (;;) {
             std::uint32_t match_mask = group->match_hash(ctrl_hash);
@@ -1799,6 +1800,7 @@ private:
             group++;
             if (group >= last_group) {
                 group = this->groups();
+                slot_base = 0;
             }
             skip_groups++;
             if (skip_groups > kSkipGroupsLimit) {
@@ -1835,8 +1837,8 @@ private:
         const group_type * group = this->group_at(group_index);
         const group_type * last_group = this->last_group();
         
-        size_type skip_groups = 0;
         size_type slot_base = group_index * kGroupSize;
+        size_type skip_groups = 0;
 
         for (;;) {
             std::uint32_t match_mask = group->match_hash(ctrl_hash);
@@ -1862,6 +1864,7 @@ private:
             group++;
             if (group >= last_group) {
                 group = this->groups();
+                slot_base = 0;
             }
             skip_groups++;
             if (skip_groups > kSkipGroupsLimit) {
@@ -1893,8 +1896,8 @@ private:
         const group_type * group = this->group_at(group_index);
         const group_type * last_group = this->last_group();
         
-        size_type skip_groups = 0;
         size_type slot_base = group_index * kGroupSize;
+        size_type skip_groups = 0;
 
         for (;;) {
             std::uint32_t match_mask = group->match_hash(ctrl_hash);
@@ -1927,6 +1930,7 @@ private:
             group++;
             if (group >= last_group) {
                 group = this->groups();
+                slot_base = 0;
             }
             skip_groups++;
             if (skip_groups > kSkipGroupsLimit) {
@@ -1953,209 +1957,97 @@ private:
     JSTD_FORCED_INLINE
     std::pair<slot_type *, FindResult>
     direct_find_or_insert(const KeyT & key) {
-        const slot_type * slot = this->find(key);
-        if (slot != this->last_slot()) {
+        size_type slot_index = this->find_index(key);
+        if (slot_index != this->slot_capacity()) {
+            const slot_type * slot = this->slot_at(slot_index);
             return { slot, kIsExists };
         }
 
         if (this->need_grow()) {
             // The size of slot reach the slot threshold or hashmap is full.
             this->grow_if_necessary();
-
-            auto find_info = this->find_failed(key);
-            ctrl = find_info.first;
-            slot = find_info.second;
         }
+
+        slot_index = this->find_failed(key);
+        slot_type * slot = this->slot_at(slot_index);
+        ctrl_type * ctrl = this->ctrl_at(slot_index);
 
         std::uint8_t ctrl_hash = 0;
 
-        if (ctrl->is_empty()) {
-            this->set_used_ctrl(ctrl, ctrl_hash);
-            return { slot, kIsNotExists };
-        } else {
-            FindResult neednt_grow = this->insert_to_place<false>(ctrl, slot, ctrl_hash);
-            return { slot, neednt_grow };
-        }
+        assert(ctrl->is_empty());
+        this->set_used_ctrl(ctrl, ctrl_hash);
+        return { slot, kIsNotExists };
     }
 
     template <typename KeyT>
     JSTD_FORCED_INLINE
     std::pair<slot_type *, FindResult>
     indirect_find_or_insert(const KeyT & key) {
-        const slot_type * slot = this->find(key);
-        if (slot != this->last_slot()) {
+        size_type slot_index = this->find_index(key);
+        if (slot_index != this->slot_capacity()) {
+            const slot_type * slot = this->slot_at(slot_index);
             return { slot, kIsExists };
         }
 
         if (this->need_grow()) {
             // The size of slot reach the slot threshold or hashmap is full.
             this->grow_if_necessary();
-
-            ctrl = this->indirect_find_failed(key);
         }
+
+        slot_index = this->find_failed(key);
+        ctrl_type * ctrl = this->ctrl_at(slot_index);
 
         size_type new_slot_index = this->slot_size_;
         slot_type * new_slot = this->slot_at(new_slot_index);
 
-        if (ctrl->is_empty()) {
-            this->set_used_ctrl(ctrl, dist_and_hash);
-            return { new_slot, kIsNotExists };
-        } else {
-            FindResult neednt_grow = this->indirect_insert_to_place<false>(ctrl, dist_and_hash);
-            return { new_slot, neednt_grow };
-        }
+        std::uint8_t ctrl_hash = 0;
+
+        assert(ctrl->is_empty());
+        this->set_used_ctrl(ctrl, ctrl_hash);
+        return { new_slot, kIsNotExists };
     }
 
     template <typename KeyT>
     JSTD_FORCED_INLINE
-    std::pair<ctrl_type *, slot_type *>
-    find_failed(const KeyT & key) {
+    size_type find_failed(const KeyT & key) {
+        std::size_t hash_code = this->get_hash(key);
         size_type slot_index = this->index_for_hash(hash_code);
-        ctrl_type * ctrl = this->ctrl_at(slot_index);
-        ctrl_type * last_ctrl = this->last_ctrl();
+        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
+        size_type group_index = slot_index / kGroupSize;
+        size_type group_pos = slot_index % kGroupSize;
+        const group_type * group = this->group_at(group_index);
+        const group_type * last_group = this->last_group();
+        
+        size_type skip_groups = 0;
+        size_type slot_base = group_index * kGroupSize;
 
-        ctrl_type dist_and_0;
-        while (dist_and_0.value <= ctrl->value) {
-            dist_and_0.incDist();
-            ctrl++;
-            assert(ctrl <= last_ctrl);
-        }
-
-        slot_type * slot = this->slot_at(ctrl);
-        o_dist_and_0 = dist_and_0;
-        return { ctrl, slot };
-    }
-
-    template <typename KeyT>
-    JSTD_FORCED_INLINE
-    ctrl_type * indirect_find_failed(const KeyT & key) {
-        size_type ctrl_index = this->index_for_hash(hash_code);
-        ctrl_type * ctrl = this->ctrl_at(ctrl_index);
-        ctrl_type * last_ctrl = this->ctrls() + this->slot_capacity();
-
-        ctrl_type dist_and_0;
-        while (dist_and_0.getLow() <= ctrl->getLow()) {
-            dist_and_0.incDist();
-            ctrl++;
-            assert(ctrl <= last_ctrl);
-        }
-
-        o_dist_and_0 = dist_and_0;
-        return ctrl;
-    }
-
-    template <bool isRehashing>
-    JSTD_FORCED_INLINE
-    FindResult insert_to_place(ctrl_type * insert_ctrl, slot_type * insert_slot, const ctrl_type & dist_and_hash) {
-        ctrl_type * ctrl = insert_ctrl;
-        slot_type * target = insert_slot;
-        ctrl_type rich_ctrl(dist_and_hash);
-        assert(!ctrl->is_empty());
-        assert(rich_ctrl.dist > ctrl->dist);
-        std::swap(rich_ctrl.value, ctrl->value);
-        ctrl++;
-        rich_ctrl.incDist();
-
-        static constexpr size_type kMinAlignment = 16;
-        static constexpr size_type kAlignment = cmax(std::alignment_of<slot_type>::value, kMinAlignment);
-#if 1
-        alignas(kAlignment) char slot_raw[sizeof(slot_type)];
-
-        slot_type * empty  = reinterpret_cast<slot_type *>(&slot_raw);
-        slot_type * insert = insert_slot;
-#else
-        alignas(kAlignment) char slot_raw1[sizeof(slot_type)];
-        alignas(kAlignment) char slot_raw2[sizeof(slot_type)];
-
-        slot_type * empty = reinterpret_cast<slot_type *>(&slot_raw1);
-        slot_type * insert;
-        if (kIsPlainKV) {
-            insert = reinterpret_cast<slot_type *>(&slot_raw2);
-            this->transfer_slot(insert, target);
-        } else {
-            insert = insert_slot;
-        }
-#endif
-        target++;
-
-        // Initialize the empty slot use default constructor if necessary
-        this->construct_empty_slot(empty);
-
-        slot_type * last_slot = this->last_slot();
-        while (target < last_slot) {
-            if (ctrl->is_empty()) {
-                this->emplace_rich_slot(ctrl, target, insert, rich_ctrl);
-                this->destroy_empty_slot(empty);
-                return kIsNotExists;
-            } else if (rich_ctrl.dist > ctrl->dist) {
-                std::swap(rich_ctrl.value, ctrl->value);
-                if (kIsPlainKV) {
-                    this->swap_plain_slot(insert, target, empty);
-                } else if (kIsSwappableKV || !kEnableExchange || kIsSmallValueType) {
-                    this->swap_slot(insert, target);
-                } else {
-                    this->exchange_slot(insert, target, empty);
-                    std::swap(insert, empty);
-                }
-            }
-
-            ctrl++;
-            target++;
-            rich_ctrl.incDist();
-            assert(rich_ctrl.dist <= kMaxDist);
-
-            if (isRehashing) {
-                assert(rich_ctrl.uvalue < this->max_distance());
+        for (;;) {
+            std::uint32_t empty_mask = group->match_empty();
+            if (empty_mask != 0) {
+                std::uint32_t empty_pos = BitUtils::bsf32(empty_mask);
+                size_type slot_pos = slot_base + empty_pos;
+                return slot_pos;
             } else {
-                if (rich_ctrl.uvalue >= this->max_distance()) {
-                    this->emplace_rich_slot(insert_ctrl, insert_slot, insert, rich_ctrl);
-                    this->destroy_empty_slot(empty);
-                    return kNeedGrow;
+                // If it doesn't overflow, set the overflow bit.
+                if (!group->is_overflow(group_pos)) {
+                    group->set_overflow(group_pos);
                 }
             }
-        }
-
-        this->emplace_rich_slot(insert_ctrl, insert_slot, insert, rich_ctrl);
-        this->destroy_empty_slot(empty);
-        return kNeedGrow;
-    }
-
-    template <bool isRehashing>
-    JSTD_FORCED_INLINE
-    FindResult indirect_insert_to_place(ctrl_type * insert_ctrl, const ctrl_type & dist_and_hash) {
-        ctrl_type * ctrl = insert_ctrl;
-        ctrl_type rich_ctrl(dist_and_hash);
-        assert(!ctrl->is_empty());
-        assert(rich_ctrl.dist > ctrl->dist);
-        std::swap(rich_ctrl.value, ctrl->value);
-        ctrl++;
-        rich_ctrl.incDist();
-
-        ctrl_type * last_ctrl = this->ctrls() + this->slot_capacity();
-        while (ctrl < last_ctrl) {
-            if (ctrl->is_empty()) {
-                ctrl->set_value(rich_ctrl);
-                return kIsNotExists;
-            } else if (rich_ctrl.dist > ctrl->dist) {
-                std::swap(rich_ctrl.value, ctrl->value);
+            slot_base += kGroupSize;
+            group++;
+            if (group >= last_group) {
+                group = this->groups();
+                slot_base = 0;
             }
-
-            ctrl++;
-            rich_ctrl.incDist();
-            assert(rich_ctrl.getDist() <= static_cast<udist_type>(kMaxDist));
-
-            if (isRehashing) {
-                assert(rich_ctrl.getDist() <= static_cast<udist_type>(kMaxDist));
-            } else {
-                if (rich_ctrl.getDist() > static_cast<udist_type>(kMaxDist)) {
-                    insert_ctrl->set_value(rich_ctrl);
-                    return kNeedGrow;
-                }
+            skip_groups++;
+            if (skip_groups > kSkipGroupsLimit) {
+                std::cout << "direct_find_failed(): key = " << key <<
+                             ", skip_groups = " << skip_groups << std::endl;
+            }
+            if (skip_groups >= this->group_capacity()) {
+                return this->slot_capacity();
             }
         }
-
-        insert_ctrl->set_value(rich_ctrl);
-        return kNeedGrow;
     }
 
     template <bool AlwaysUpdate>
