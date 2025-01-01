@@ -95,7 +95,7 @@ public:
     }
     flat_map_iterator(hashmap_type * owner, size_type index) noexcept
         : owner_(const_cast<const hashmap_type *>(owner)),
-          index_(reinterpret_cast<ssize_type>(index) {
+          index_(reinterpret_cast<ssize_type>(index)) {
     }
     flat_map_iterator(const hashmap_type * owner, size_type index) noexcept
         : owner_(owner), index_(reinterpret_cast<ssize_type>(index)) {
