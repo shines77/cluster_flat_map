@@ -14,6 +14,7 @@
 #include <cassert>
 
 #include <string>
+#include <tuple>
 #include <utility>      // For std::pair<T1, T2>
 #include <type_traits>
 
@@ -562,17 +563,17 @@ struct PairOffsetOf<Pair, typename std::is_standard_layout<Pair>::type> {
 };
 
 template <typename Key, typename Value>
-struct is_compatible_kv_layout {
+struct is_layout_compatible_kv {
 private:
     struct Pair {
-        Key     first;
-        Value   second;
+        Key   first;
+        Value second;
     };
 
 public:
     // Is class P layout-compatible with class Pair ?
     template <typename P>
-    static constexpr bool isCompatiblePairLayout() {
+    static constexpr bool isLayoutCompatible() {
         return (std::is_standard_layout<P>() &&
                (sizeof(P) == sizeof(Pair)) &&
                (alignof(P) == alignof(Pair)) &&
@@ -585,8 +586,8 @@ public:
     static constexpr bool value = std::is_standard_layout<Key>() &&
                                   std::is_standard_layout<Pair>() &&
                                   (PairOffsetOf<Pair>::kFirst == 0) &&
-                                  isCompatiblePairLayout<std::pair<Key, Value>>() &&
-                                  isCompatiblePairLayout<std::pair<const Key, Value>>();
+                                  isLayoutCompatible<std::pair<Key, Value>>() &&
+                                  isLayoutCompatible<std::pair<const Key, Value>>();
 };
 
 //
@@ -594,7 +595,7 @@ public:
 // MutablePair = std::pair<Key, Value>
 //
 template <typename ConstPair, typename MutablePair>
-struct is_compatible_pair_layout {
+struct is_layout_compatible_pair {
 public:
     typedef typename ConstPair::first_type      First;
     typedef typename ConstPair::second_type     Second;
@@ -603,13 +604,13 @@ public:
 
 private:
     struct Pair {
-        MutableFirst    first;
-        MutableSecond   second;
+        MutableFirst  first;
+        MutableSecond second;
     };
 
     // Is class P layout-compatible with class Pair ?
     template <typename P>
-    static constexpr bool isCompatiblePairLayout() {
+    static constexpr bool isLayoutCompatible() {
         return (std::is_standard_layout<P>() &&
                (sizeof(P) == sizeof(Pair)) &&
                (alignof(P) == alignof(Pair)) &&
@@ -623,8 +624,8 @@ public:
     static constexpr bool value = std::is_standard_layout<MutableFirst>() &&
                                   std::is_standard_layout<Pair>() &&
                                   (PairOffsetOf<Pair>::kFirst == 0) &&
-                                  isCompatiblePairLayout<ConstPair>() &&
-                                  isCompatiblePairLayout<MutablePair>();
+                                  isLayoutCompatible<ConstPair>() &&
+                                  isLayoutCompatible<MutablePair>();
 };
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -661,6 +662,170 @@ struct KeyArgSelector<false> {
     template <typename K, typename key_type>
     using type = key_type;
 };
+
+//////////////////////////////////////////////////////////////////////////////////
+
+// Define integer sequence template
+template <int...>
+struct index_sequence {};
+
+// Recursive generation of integer sequences
+template <int N, int... Is>
+struct make_index_sequence : make_index_sequence<N - 1, N - 1, Is...> {};
+
+// Recursive termination condition
+template <int... Is>
+struct make_index_sequence<0, Is...> {
+    using type = index_sequence<Is...>;
+};
+
+// Simplified use of alias templates
+template <int N>
+using make_index_sequence_t = typename make_index_sequence<N>::type;
+
+//////////////////////////////////////////////////////////////////////////////////
+
+//
+// Constructs T into uninitialized storage pointed by `ptr` using the args
+// specified in the tuple.
+//
+template <class Alloc, class T, class Tuple, size_t ... I>
+void ConstructFromTupleImpl(Alloc * alloc, T * ptr, Tuple && t,
+                            jstd::index_sequence<I...>) {
+    std::allocator_traits<Alloc>::construct(*alloc, ptr, std::get<I>(std::forward<Tuple>(t))...);
+}
+
+template <class T, class First>
+struct WithConstructedImplF {
+    template <class ... Args>
+    decltype(std::declval<First>()(std::declval<T>())) operator()(
+        Args && ... args) const {
+        return std::forward<First>(f)(T(std::forward<Args>(args)...));
+    }
+    First && f;
+};
+
+template <class T, class Tuple, size_t... Is, class First>
+decltype(std::declval<First>()(std::declval<T>())) WithConstructedImpl(
+    Tuple && t, jstd::index_sequence<Is...>, First&& f) {
+    return WithConstructedImplF<T, First>{std::forward<First>(f)}(
+        std::get<Is>(std::forward<Tuple>(t))...);
+}
+
+template <class T, size_t ... Is>
+auto TupleRefImpl(T && t, jstd::index_sequence<Is...>)
+-> decltype(std::forward_as_tuple(std::get<Is>(std::forward<T>(t))...)) {
+    return std::forward_as_tuple(std::get<Is>(std::forward<T>(t))...);
+}
+
+//
+// Returns a tuple of references to the elements of the input tuple. T must be a
+// tuple.
+//
+template <class T>
+auto TupleRef(T && t) -> decltype(
+    TupleRefImpl(std::forward<T>(t),
+                 jstd::make_index_sequence<std::tuple_size<typename std::decay<T>::type>::value>())) {
+    return TupleRefImpl(
+        std::forward<T>(t),
+        jstd::make_index_sequence<std::tuple_size<typename std::decay<T>::type>::value>());
+}
+
+template <class First, class K, class V>
+decltype(std::declval<First>()(std::declval<const K &>(), std::piecewise_construct,
+                               std::declval<std::tuple<K>>(), std::declval<V>()))
+    DecomposePairImpl(First && first, std::pair<std::tuple<K>, V> pair) {
+    const auto & key = std::get<0>(pair.first);
+    return std::forward<First>(first)(key, std::piecewise_construct,
+                                      std::move(pair.first),
+                                      std::move(pair.second));
+}
+
+//
+// Constructs T into uninitialized storage pointed by `ptr` using the args
+// specified in the tuple.
+//
+template <class Alloc, class T, class Tuple>
+void ConstructFromTuple(Alloc * alloc, T * ptr, Tuple && t) {
+    ConstructFromTupleImpl(
+        alloc, ptr, std::forward<Tuple>(t),
+        jstd::make_index_sequence<std::tuple_size<typename std::decay<Tuple>::type>::value>());
+}
+
+//
+// Constructs T using the args specified in the tuple and calls F with the
+// constructed value.
+//
+template <class T, class Tuple, class First>
+decltype(std::declval<First>()(std::declval<T>()))
+WithConstructed(Tuple && t, First && first) {
+    return WithConstructedImpl<T>(
+        std::forward<Tuple>(t),
+        jstd::make_index_sequence<std::tuple_size<typename std::decay<Tuple>::type>::value>(),
+        std::forward<First>(first));
+}
+
+//
+// Given arguments of an std::pair's consructor, PairArgs() returns a pair of
+// tuples with references to the passed arguments. The tuples contain
+// constructor arguments for the first and the second elements of the pair.
+//
+// The following two snippets are equivalent.
+//
+// 1. std::pair<First, Second> p(args...);
+//
+// 2. auto a = PairArgs(args...);
+//    std::pair<First, Second> p(std::piecewise_construct,
+//                               std::move(a.first), std::move(a.second));
+//
+inline
+std::pair<std::tuple<>, std::tuple<>>
+PairArgs() {
+    return { };
+}
+
+template <class First, class Second>
+std::pair<std::tuple<First &&>, std::tuple<Second &&>>
+PairArgs(First && first, Second && second) {
+    return { std::piecewise_construct,
+             std::forward_as_tuple(std::forward<First>(first)),
+             std::forward_as_tuple(std::forward<Second>(second)) };
+}
+
+template <class First, class Second>
+std::pair<std::tuple<const First &>, std::tuple<const Second &>>
+PairArgs(const std::pair<First, Second> & pair) {
+    return PairArgs(pair.first, pair.second);
+}
+
+template <class First, class Second>
+std::pair<std::tuple<First &&>, std::tuple<Second &&>>
+PairArgs(std::pair<First, Second> && pair) {
+    return PairArgs(std::forward<First>(pair.first), std::forward<Second>(pair.second));
+}
+
+template <class First, class Second>
+auto PairArgs(std::piecewise_construct_t, First && first, Second && second)
+-> decltype(std::make_pair(TupleRef(std::forward<First>(first)),
+                           TupleRef(std::forward<Second>(second)))) {
+    return std::make_pair(TupleRef(std::forward<First>(first)),
+                          TupleRef(std::forward<Second>(second)));
+}
+
+// A helper function for implementing apply() in map policies.
+template <class First, class ... Args>
+auto DecomposePair(First && f, Args && ... args)
+-> decltype(DecomposePairImpl(std::forward<First>(f), PairArgs(std::forward<Args>(args)...))) {
+    return DecomposePairImpl(std::forward<First>(f), PairArgs(std::forward<Args>(args)...));
+}
+
+// A helper function for implementing apply() in set policies.
+template <class First, class Arg>
+decltype(std::declval<First>()(std::declval<const Arg &>(), std::declval<Arg>()))
+DecomposeValue(First && f, Arg && arg) {
+    const auto & key = arg;
+    return std::forward<First>(f)(key, std::forward<Arg>(arg));
+}
 
 //////////////////////////////////////////////////////////////////////////////////
 

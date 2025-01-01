@@ -76,7 +76,7 @@ template <typename Key, typename Value,
           typename KeyEqual = std::equal_to< typename std::remove_const<Key>::type >,
           typename Allocator = std::allocator< std::pair<const typename std::remove_const<Key>::type,
                                                          typename std::remove_const<Value>::type> > >
-class cluster_flat_map
+class JSTD_DLL cluster_flat_map
 {
     //
 public:

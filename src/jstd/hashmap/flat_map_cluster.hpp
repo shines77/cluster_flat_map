@@ -55,37 +55,11 @@
 #include <assert.h>
 
 #include "jstd/support/BitVec.h"
-
-#if defined(_MSC_VER)
-#include <xatomic.h>
-#define __COMPILER_BARRIER() \
-    _Compiler_barrier()
-#else
-#define __COMPILER_BARRIER() \
-    __asm volatile ("" : : : "memory")
-#endif
+#include "jstd/memory/memory_barrier.h"
 
 namespace jstd {
 
-#if 0
-static inline
-__m128i _mm_setones_si128()
-{
-    __m128i ones {};
-    ones = _mm_cmpeq_epi16(ones, ones);
-    return ones;
-}
-
-static inline
-__m256i _mm256_setones_si256()
-{
-    __m256i ones {};
-    ones = _mm256_cmpeq_epi16(ones, ones);
-    return ones;
-}
-#endif
-
-class cluster_meta_ctrl
+class JSTD_DLL cluster_meta_ctrl
 {
 public:
     static constexpr std::uint8_t kHashMask     = 0b01111111;
@@ -175,7 +149,7 @@ private:
 };
 
 template <typename T>
-class flat_map_cluster16
+class JSTD_DLL flat_map_cluster16
 {
 public:
     typedef T                       ctrl_type;

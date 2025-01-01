@@ -81,7 +81,7 @@ namespace jstd {
 
 template <typename TypePolicy, typename Hash,
           typename KeyEqual, typename Allocator>
-class cluster_flat_table
+class JSTD_DLL cluster_flat_table
 {
 public:
     typedef TypePolicy                          type_policy;
@@ -129,30 +129,27 @@ public:
             (detail::is_plain_type<key_type>::value &&
              detail::is_plain_type<mapped_type>::value));
 
-    static constexpr bool kIsSmallKeyT   = (sizeof(key_type)    <= sizeof(std::size_t) * 2);
-    static constexpr bool kIsSmallValueType = (sizeof(mapped_type) <= sizeof(std::size_t) * 2);
+    static constexpr size_type kSizeTypeLength = sizeof(std::size_t);
+
+    static constexpr bool kIsSmallKeyType   = (sizeof(key_type)    <= kSizeTypeLength * 2);
+    static constexpr bool kIsSmallValueType = (sizeof(mapped_type) <= kSizeTypeLength * 2);
 
     static constexpr bool kDetectIsIndirectKey = !(detail::is_plain_type<key_type>::value ||
-                                                   (sizeof(key_type) <= sizeof(std::size_t)) ||
-                                                   (sizeof(key_type) <= sizeof(std::uint64_t)) ||
-                                                  ((sizeof(key_type) <= (sizeof(std::size_t) * 2)) &&
-                                                    is_slot_trivial_destructor));
+                                                  (sizeof(key_type) <= kSizeTypeLength * 2) ||
+                                                 ((sizeof(key_type) <= (kSizeTypeLength * 4)) &&
+                                                   is_slot_trivial_destructor));
 
     static constexpr bool kDetectIsIndirectValue = !(detail::is_plain_type<mapped_type>::value ||
-                                                     (sizeof(mapped_type) <= sizeof(std::size_t)) ||
-                                                     (sizeof(mapped_type) <= sizeof(std::uint64_t)) ||
-                                                    ((sizeof(mapped_type) <= (sizeof(std::size_t) * 2)) &&
-                                                      is_slot_trivial_destructor));
+                                                    (sizeof(mapped_type) <= kSizeTypeLength * 2) ||
+                                                   ((sizeof(mapped_type) <= (kSizeTypeLength * 4)) &&
+                                                     is_slot_trivial_destructor));
 
-    static constexpr bool kIsIndirectKV = false;
+    static constexpr bool kIsIndirectKey = false;
+    static constexpr bool kIsIndirectValue = false;
+    static constexpr bool kIsIndirectKV = kIsIndirectKey | kIsIndirectValue;
     static constexpr bool kNeedStoreHash = true;
 
-    template <typename key_type, typename mapped_type>
-    class slot_storge {
-        //
-    };
-
-    using slot_type = slot_storge<key_type, mapped_type>;
+    using slot_type = flat_map_slot_storage<type_policy, kIsIndirectKey, kIsIndirectValue>;
 
     static constexpr size_type kCacheLineSize = 64;
     static constexpr size_type kActualSlotAlignment = alignof(slot_type);
@@ -175,18 +172,20 @@ public:
 
 private:
     group_type *    groups_;
-    slot_type *     slots_;
     size_type       slot_size_;
     size_type       slot_mask_;     // capacity = slot_mask + 1
     size_type       slot_threshold_;
+    slot_type *     slots_;
+    key_type *      key_arrays_;
+    mapped_type *   value_arrays_;
     size_type       mlf_;
 
 #if CLUSTER_USE_HASH_POLICY
     hash_policy     hash_policy_;
 #endif
 
-    hasher        hasher_;
-    key_equal     key_equal_;
+    hasher          hasher_;
+    key_equal       key_equal_;
 
     allocator_type  allocator_;
 
@@ -285,7 +284,7 @@ public:
     }
 
     size_type bucket(const key_type & key) const {
-        size_type ctrl_index = this->find_ctrl_index(key);
+        size_type ctrl_index = this->find_index(key);
         return ctrl_index;
     }
 
@@ -342,10 +341,10 @@ public:
     }
 
     slot_type * last_slot() {
-        return (this->last() + this->slot_capacity());
+        return (this->slots() + this->slot_capacity());
     }
     const slot_type * last_slot() const {
-        return (this->last() + this->slot_capacity());
+        return (this->slots() + this->slot_capacity());
     }
 
     ///
@@ -641,7 +640,7 @@ private:
         return max_lookups;
     }
 
-    size_type min_require_capacity(size_type init_capacity) const {
+    inline size_type min_require_capacity(size_type init_capacity) const {
         size_type new_capacity = init_capacity * kLoadFactorAmplify / this->mlf_;
         return new_capacity;
     }
@@ -650,63 +649,63 @@ private:
         return (reinterpret_cast<intptr_t>(value) >= 0);
     }
 
-    iterator iterator_at(size_type index) noexcept {
+    inline iterator iterator_at(size_type index) noexcept {
         if (!kIsIndirectKV)
             return { this, index };
         else
             return { this->slot_at(index) };
     }
 
-    const_iterator iterator_at(size_type index) const noexcept {
+    inline const_iterator iterator_at(size_type index) const noexcept {
         if (!kIsIndirectKV)
             return { this, index };
         else
             return { this->slot_at(index) };
     }
 
-    iterator iterator_at(ctrl_type * ctrl) noexcept {
+    inline iterator iterator_at(ctrl_type * ctrl) noexcept {
         if (!kIsIndirectKV)
             return { this, this->index_of(ctrl) };
         else
             return { this->slot_at(ctrl->get_index()) };
     }
 
-    const_iterator iterator_at(const ctrl_type * ctrl) const noexcept {
+    inline const_iterator iterator_at(const ctrl_type * ctrl) const noexcept {
         if (!kIsIndirectKV)
             return { this, this->index_of(ctrl) };
         else
             return { this->slot_at(ctrl->get_index()) };
     }
 
-    iterator iterator_at(slot_type * slot) noexcept {
+    inline iterator iterator_at(slot_type * slot) noexcept {
         if (!kIsIndirectKV)
             return { this, this->index_of(slot) };
         else
             return { slot };
     }
 
-    const_iterator iterator_at(const slot_type * slot) const noexcept {
+    inline const_iterator iterator_at(const slot_type * slot) const noexcept {
         if (!kIsIndirectKV)
             return { this, this->index_of(slot) };
         else
             return { slot };
     }
 
-    iterator next_valid_iterator(ctrl_type * ctrl, iterator iter) {
+    inline iterator next_valid_iterator(ctrl_type * ctrl, iterator iter) {
         if (ctrl->is_used())
             return iter;
         else
             return ++iter;
     }
 
-    const_iterator next_valid_iterator(ctrl_type * ctrl, const_iterator iter) {
+    inline const_iterator next_valid_iterator(ctrl_type * ctrl, const_iterator iter) {
         if (ctrl->is_used())
             return iter;
         else
             return ++iter;
     }
 
-    iterator next_valid_iterator(iterator iter) {
+    inline iterator next_valid_iterator(iterator iter) {
         size_type index = this->index_of(iter);
         if (!kIsIndirectKV) {
             ctrl_type * ctrl = this->ctrl_at(index);
@@ -717,7 +716,7 @@ private:
         }
     }
 
-    const_iterator next_valid_iterator(const_iterator iter) {
+    inline const_iterator next_valid_iterator(const_iterator iter) {
         size_type index = this->index_of(iter);
         if (!kIsIndirectKV) {
             ctrl_type * ctrl = this->ctrl_at(index);
@@ -1046,7 +1045,7 @@ private:
 #if CLUSTER_USE_SEPARATE_SLOTS
         ctrl_type * new_ctrls = CtrlAllocTraits::allocate(this->ctrl_allocator_, ctrl_alloc_size);
 #else
-        size_type new_slot_capacity = this->mul_mlf(new_capacity) + new_max_lookups + 1;
+        size_type new_slot_capacity = new_capacity * this->mlf_ / kLoadFactorAmplify + new_max_lookups + 1;
         size_type total_alloc_size = this->TotalAllocSize<kSlotAlignment>(ctrl_alloc_size,
                                            kIsIndirectKV ? new_slot_capacity : new_ctrl_capacity);
 
@@ -1381,228 +1380,168 @@ private:
         size_type skip_groups = 0;
         size_type slot_base = group_index * kGroupSize;
 
-        while (dist_and_0.getLow() <= ctrl->getLow()) {
-            if (!kNeedStoreHash || ctrl->hash_equals(ctrl_hash)) {
-                const slot_type * slot = this->slot_at(ctrl);
-                if (this->key_equal_(slot->value.first, key)) {
-                    return slot;
+        for (;;) {
+            int match_mask = group->match_hash(ctrl_hash);
+            if (match_mask != 0) {
+                do {
+                    uint32_t match_pos = BitUtils::bsf64(match_mask);
+                    uint64_t match_bit = BitUtils::ls1b64(match_mask);
+                    match_mask ^= match_bit;
+
+                    size_type slot_pos = slot_base + match_pos;
+                    const slot_type * slot = this->slot_at(slot_pos);
+                    if (this->key_equal_(slot->value.first, key)) {
+                        return slot;
+                    }
+                } while (match_mask != 0);
+            } else {
+                // If it doesn't overflow, means it hasn't been found.
+                if (!group->is_overflow(group_pos)) {
+                    return this->last_slot();
                 }
             }
-            dist_and_0.incDist();
-            ctrl++;
-            assert(ctrl <= last_ctrl);
+            slot_base += kGroupSize;
+            group++;
+            if (group >= last_group) {
+                group = this->groups();
+            }
+            skip_groups++;
+            if (skip_groups > kSkipGroupsLimit) {
+                std::cout << "indirect_find(): key = " << key <<
+                             ", skip_groups = " << skip_groups << std::endl;
+            }
+            if (skip_groups >= this->group_capacity()) {
+                return this->last_slot();
+            }
         }
-
-        return this->last_slot();
     }
 
     template <typename KeyT>
-    size_type find_ctrl_index(const KeyT & key) {
-        return const_cast<const this_type *>(this)->find_ctrl_index(key);
-    }
-
-    template <typename KeyT>
-    size_type find_ctrl_index(const KeyT & key) const {
-        return this->find_index<KeyT, true>(key);
-    }
-
-    template <typename KeyT>
-    size_type find_slot_index(const KeyT & key) {
-        return const_cast<const this_type *>(this)->find_slot_index(key);
-    }
-
-    template <typename KeyT>
-    size_type find_slot_index(const KeyT & key) const {
-        return this->find_index<KeyT, false>(key);
-    }
-
-    template <typename KeyT, bool IsCtrlIndex>
     size_type find_index(const KeyT & key) {
-        return const_cast<const this_type *>(this)->find_index<KeyT, IsCtrlIndex>(key);
+        return const_cast<const this_type *>(this)->find_index<KeyT>(key);
     }
 
-    template <typename KeyT, bool IsCtrlIndex>
+    template <typename KeyT>
     size_type find_index(const KeyT & key) const {
         if (!kIsIndirectKV) {
-            return this->direct_find_index<KeyT, IsCtrlIndex>(key);
+            return this->direct_find_index<KeyT>(key);
         } else {
-            return this->indirect_find_index<KeyT, IsCtrlIndex>(key);
+            return this->indirect_find_index<KeyT>(key);
         }
     }
 
-    template <typename KeyT, bool IsCtrlIndex>
+    template <typename KeyT>
     size_type direct_find_index(const KeyT & key) const {
-        // Prefetch for resolve potential ctrls TLB misses.
-        //Prefetch_Read_T2(this->ctrls());
-
         std::size_t hash_code = this->get_hash(key);
         size_type slot_index = this->index_for_hash(hash_code);
         std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
-        ctrl_type dist_and_hash(no_init_t{});
+        size_type group_index = slot_index / kGroupSize;
+        size_type group_pos = slot_index % kGroupSize;
+        const group_type * group = this->group_at(group_index);
+        const group_type * last_group = this->last_group();
+        
+        size_type skip_groups = 0;
+        size_type slot_base = group_index * kGroupSize;
 
-        const ctrl_type * ctrl = this->ctrl_at(slot_index);
-        const slot_type * slot = this->slot_at(slot_index);
-#if 0
-        dist_and_hash.setValue(static_cast<ctrl_value_t>(ctrl_hash));
+        for (;;) {
+            int match_mask = group->match_hash(ctrl_hash);
+            if (match_mask != 0) {
+                do {
+                    uint32_t match_pos = BitUtils::bsf64(match_mask);
+                    uint64_t match_bit = BitUtils::ls1b64(match_mask);
+                    match_mask ^= match_bit;
 
-        while (dist_and_hash.value < ctrl->value) {
-            dist_and_hash.incDist();
-            ctrl++;
-        }
-
-        do {
-            if (dist_and_hash.value == ctrl->value) {
-                const slot_type * target = slot + dist_and_hash.dist;
-                if (this->key_equal_(target->value.first, key)) {
-                    return this->index_of(ctrl);
-                }
-            } else if (dist_and_hash.dist > ctrl->dist) {
-                break;
-            }
-            dist_and_hash.incDist();
-            ctrl++;
-        } while (1);
-
-        return this->slot_capacity();
-#elif 0
-        dist_and_hash.setValue(static_cast<ctrl_value_t>(ctrl_hash));
-
-        while (dist_and_hash.value < ctrl->value) {
-            dist_and_hash.incDist();
-            ctrl++;
-        }
-
-        do {
-            if (dist_and_hash.value == ctrl->value) {
-                const slot_type * target = slot + dist_and_hash.dist;
-                if (this->key_equal_(target->value.first, key)) {
-                    return this->index_of(ctrl);
+                    size_type slot_pos = slot_base + match_pos;
+                    const slot_type * slot = this->slot_at(slot_pos);
+                    if (this->key_equal_(slot->value.first, key)) {
+                        return slot_pos;
+                    }
+                } while (match_mask != 0);
+            } else {
+                // If it doesn't overflow, means it hasn't been found.
+                if (!group->is_overflow(group_pos)) {
+                    return this->slot_capacity();
                 }
             }
-            dist_and_hash.incDist();
-            ctrl++;
-        } while (dist_and_hash.dist <= ctrl->dist);
-
-        return this->slot_capacity();
-#elif 0
-        ctrl_type dist_and_0;
-
-        while (dist_and_0.value <= ctrl->value) {
-            if (this->key_equal_(slot->value.first, key)) {
-                return this->index_of(ctrl);
+            slot_base += kGroupSize;
+            group++;
+            if (group >= last_group) {
+                group = this->groups();
             }
-            dist_and_0.incDist();
-            ctrl++;
-            slot++;
+            skip_groups++;
+            if (skip_groups > kSkipGroupsLimit) {
+                std::cout << "direct_find_index(): key = " << key <<
+                             ", skip_groups = " << skip_groups << std::endl;
+            }
+            if (skip_groups >= this->group_capacity()) {
+                return this->slot_capacity();
+            }
         }
-
-        return this->slot_capacity();
-#elif 1
-        ctrl_type dist_and_0;
-
-        while (dist_and_0.value <= ctrl->value) {
-            if (!kNeedStoreHash || ctrl->hash_equals(ctrl_hash)) {
-                if (this->key_equal_(slot->value.first, key)) {
-                    return this->index_of(ctrl);
-                }
-            }
-            dist_and_0.incDist();
-            ctrl++;
-            slot++;
-        }
-
-        return this->slot_capacity();
-#else
-        if (ctrl->value >= ctrl_type::make_dist(0)) {
-            if (!kNeedStoreHash || ctrl->hash_equals(ctrl_hash)) {
-                if (this->key_equal_(slot->value.first, key)) {
-                    return this->index_of(ctrl);
-                }
-            }
-        } else {
-            return this->slot_capacity();
-        }
-
-        ctrl++;
-        slot++;
-
-        if (ctrl->value >= ctrl_type::make_dist(1)) {
-            if (!kNeedStoreHash || ctrl->hash_equals(ctrl_hash)) {
-                if (this->key_equal_(slot->value.first, key)) {
-                    this->index_of(ctrl);
-                }
-            }
-        } else {
-            return this->slot_capacity();
-        }
-
-        ctrl++;
-        slot++;
-#endif
-
-#if 0
-        dist_and_hash.setValue(2, ctrl_hash);
-        const slot_type * last_slot = this->last_slot();
-
-        while (slot < last_slot) {
-            group_type group(ctrl);
-            auto mask32 = group.matchHashAndDistance(dist_and_hash.value);
-            std::uint32_t maskHash = mask32.maskHash;
-            while (maskHash != 0) {
-                size_type pos = BitUtils::bsf32(maskHash);
-                maskHash = BitUtils::clearLowBit32(maskHash);
-                size_type index = group.index(0, pos);
-                const slot_type * target = slot + index;
-                if (this->key_equal_(target->value.first, key)) {
-                    this->index_of(ctrl);
-                }
-            }
-            if (mask32.maskEmpty != 0) {
-                break;
-            }
-            dist_and_hash.incDist(kGroupSize);
-            ctrl += kGroupSize;
-            slot += kGroupSize;
-        }
-
-        return this->slot_capacity();
-#endif
     }
 
-    template <typename KeyT, bool IsCtrlIndex>
-    size_type indirect_find_index(const KeyT & key) const {
-        // Prefetch for resolve potential ctrls TLB misses.
-        //Prefetch_Read_T2(this->ctrls());
+    template <typename KeyT>
+    KeyT & slot_key_at(size_type index) {
+        return this->key_arrays_[index];
+    }
 
+    template <typename KeyT>
+    size_type indirect_find_index(const KeyT & key) const {
         if (!kIsIndirectKV) {
             assert(false);
         }
 
         std::size_t hash_code = this->get_hash(key);
-        size_type ctrl_index = this->index_for_hash(hash_code);
+        size_type slot_index = this->index_for_hash(hash_code);
         std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
+        size_type group_index = slot_index / kGroupSize;
+        size_type group_pos = slot_index % kGroupSize;
+        const group_type * group = this->group_at(group_index);
+        const group_type * last_group = this->last_group();
+        
+        size_type skip_groups = 0;
+        size_type cltr_base = group_index * kGroupSize;
 
-        const ctrl_type * last_ctrl = this->ctrls() + this->slot_capacity();
-        const ctrl_type * ctrl = this->ctrl_at(ctrl_index);
-        ctrl_type dist_and_0;
+        for (;;) {
+            int match_mask = group->match_hash(ctrl_hash);
+            if (match_mask != 0) {
+                do {
+                    uint32_t match_pos = BitUtils::bsf64(match_mask);
+                    uint64_t match_bit = BitUtils::ls1b64(match_mask);
+                    match_mask ^= match_bit;
 
-        while (dist_and_0.getLow() <= ctrl->getLow()) {
-            if (!kNeedStoreHash || ctrl->hash_equals(ctrl_hash)) {
-                size_type slot_index = ctrl->getIndex();
-                const slot_type * slot = this->slot_at(slot_index);
-                if (this->key_equal_(slot->value.first, key)) {
-                    if (IsCtrlIndex)
-                        return this->index_of_ctrl(ctrl);
-                    else
-                        return this->index_of(slot);
+                    size_type slot_pos = slot_base + match_pos;
+                    const slot_type * slot = this->slot_at(slot_pos);
+                    if (!kIsIndirectKey) {
+                        if (this->key_equal_(slot->value.first, key)) {
+                            return slot_pos;
+                        }
+                    } else {
+                        KeyT & ind_key = template this->slot_key_at<KeyT>(slot->value.first);
+                        if (this->key_equal_(ind_key, key)) {
+                            return slot_pos;
+                        }
+                    }
+                } while (match_mask != 0);
+            } else {
+                // If it doesn't overflow, means it hasn't been found.
+                if (!group->is_overflow(group_pos)) {
+                    return this->slot_capacity();
                 }
             }
-            dist_and_0.incDist();
-            ctrl++;
-            assert(ctrl <= last_ctrl);
+            slot_base += kGroupSize;
+            group++;
+            if (group >= last_group) {
+                group = this->groups();
+            }
+            skip_groups++;
+            if (skip_groups > kSkipGroupsLimit) {
+                std::cout << "indirect_find_index(): key = " << key <<
+                             ", skip_groups = " << skip_groups << std::endl;
+            }
+            if (skip_groups >= this->group_capacity()) {
+                return this->slot_capacity();
+            }
         }
-
-        return this->slot_capacity();
     }
 
     template <typename KeyT>
@@ -1619,142 +1558,22 @@ private:
     JSTD_FORCED_INLINE
     std::pair<slot_type *, FindResult>
     direct_find_or_insert(const KeyT & key) {
-        std::size_t hash_code = this->get_hash(key);
-        size_type slot_index = this->index_for_hash(hash_code);
-        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
-
-        ctrl_type * ctrl = this->ctrl_at(slot_index);
-        slot_type * slot = this->slot_at(slot_index);
-        ctrl_type dist_and_0;
-        ctrl_type dist_and_hash(no_init_t{});
-#if 0
-        while (dist_and_0.value <= ctrl->value) {
-            if (this->key_equal_(slot->value.first, key)) {
-                return { slot, kIsExists };
-            }
-
-            ctrl++;
-            slot++;
-            dist_and_0.incDist();
-            assert(slot < this->last_slot());
+        const slot_type * slot = this->find(key);
+        if (slot != this->last_slot()) {
+            return { slot, kIsExists };
         }
 
-        if (this->need_grow() || (dist_and_0.uvalue >= this->max_distance())) {
+        if (this->need_grow()) {
             // The size of slot reach the slot threshold or hashmap is full.
             this->grow_if_necessary();
 
-            auto find_info = this->find_failed(hash_code, dist_and_0);
+            auto find_info = this->find_failed(key);
             ctrl = find_info.first;
             slot = find_info.second;
         }
 
         dist_and_hash.mergeHash(dist_and_0, ctrl_hash);
         //return { slot, kIsNotExists };
-#elif 1
-        while (dist_and_0.value <= ctrl->value) {
-            if (!kNeedStoreHash || ctrl->hash_equals(ctrl_hash)) {
-                if (this->key_equal_(slot->value.first, key)) {
-                    return { slot, kIsExists };
-                }
-            }
-
-            ctrl++;
-            slot++;
-            dist_and_0.incDist();
-            assert(slot < this->last_slot());
-        }
-
-        if (this->need_grow() || (dist_and_0.uvalue >= this->max_distance())) {
-            // The size of slot reach the slot threshold or hashmap is full.
-            this->grow_if_necessary();
-
-            auto find_info = this->find_failed(hash_code, dist_and_0);
-            ctrl = find_info.first;
-            slot = find_info.second;
-        }
-
-        dist_and_hash.mergeHash(dist_and_0, ctrl_hash);
-        //return { slot, kIsNotExists };
-#else
-        const slot_type * last_slot;
-
-        if (dist_and_0.value <= ctrl->value) {
-            if (!kNeedStoreHash || ctrl->hash_equals(ctrl_hash)) {
-                if (this->key_equal_(slot->value.first, key)) {
-                    return { slot, kIsExists };
-                }
-            }
-        } else {
-            goto InsertOrGrow;
-        }
-
-        ctrl++;
-        slot++;
-        dist_and_0.incDist();
-
-        if (dist_and_0.value <= ctrl->value) {
-            if (!kNeedStoreHash || ctrl->hash_equals(ctrl_hash)) {
-                if (this->key_equal_(slot->value.first, key)) {
-                    return { slot, kIsExists };
-                }
-            }
-        } else {
-            goto InsertOrGrow;
-        }
-
-        ctrl++;
-        slot++;
-        dist_and_hash.setValue(2, ctrl_hash);
-
-        last_slot = this->last_slot();
-
-        while (slot < last_slot) {
-            group_type group(ctrl);
-            auto mask32 = group.matchHashAndDistance(dist_and_hash.value);
-            std::uint32_t maskHash = mask32.maskHash;
-            while (maskHash != 0) {
-                size_type pos = BitUtils::bsf32(maskHash);
-                maskHash = BitUtils::clearLowBit32(maskHash);
-                size_type index = group.index(0, pos);
-                slot_type * target = slot + index;
-                if (this->key_equal_(target->value.first, key)) {
-                    dist_and_hash.dist += std::uint8_t(index);
-                    return { target, kIsExists };
-                }
-            }
-            std::uint32_t maskEmpty = mask32.maskEmpty;
-            if (maskEmpty != 0) {
-                // It's a [EmptyEntry], or (distance > ctrl->dist) entry.
-                size_type pos = BitUtils::bsf32(maskEmpty);
-                size_type index = group_type::index(0, pos);
-                ctrl = ctrl + index;
-                slot = slot + index;
-                dist_and_hash.dist += std::uint8_t(index);
-                break;
-            }
-            dist_and_hash.incDist(kGroupSize);
-            ctrl += kGroupSize;
-            slot += kGroupSize;
-        }
-
-        dist_and_0.dist = dist_and_hash.dist;
-        goto InsertOrGrow_Start;
-
-InsertOrGrow:
-        dist_and_hash.mergeHash(dist_and_0, ctrl_hash);
-
-InsertOrGrow_Start:
-        if (this->need_grow() || (dist_and_0.uvalue >= this->max_distance())) {
-            // The size of slot reach the slot threshold or hashmap is full.
-            this->grow_if_necessary();
-
-            auto find_info = this->find_failed(hash_code, dist_and_0);
-            ctrl = find_info.first;
-            slot = find_info.second;
-
-            dist_and_hash.mergeHash(dist_and_0, ctrl_hash);
-        }
-#endif
 
         if (ctrl->is_empty()) {
             this->set_used_ctrl(ctrl, dist_and_hash);
@@ -1769,40 +1588,19 @@ InsertOrGrow_Start:
     JSTD_FORCED_INLINE
     std::pair<slot_type *, FindResult>
     indirect_find_or_insert(const KeyT & key) {
-        std::size_t hash_code = this->get_hash(key);
-        size_type ctrl_index = this->index_for_hash(hash_code);
-        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
-
-        ctrl_type * last_ctrl = this->ctrls() + this->slot_capacity();
-        ctrl_type * ctrl = this->ctrl_at(ctrl_index);
-        ctrl_type dist_and_0;
-        ctrl_type dist_and_hash(no_init_t{});
-
-        while (dist_and_0.getLow() <= ctrl->getLow()) {
-            if (!kNeedStoreHash || ctrl->hash_equals(ctrl_hash)) {
-                size_type slot_index = ctrl->getIndex();
-                slot_type * target = this->slot_at(slot_index);
-                if (this->key_equal_(target->value.first, key)) {
-                    return { target, kIsExists };
-                }
-            }
-
-            dist_and_0.incDist();
-            ctrl++;
-            assert(ctrl <= last_ctrl);
+        const slot_type * slot = this->find(key);
+        if (slot != this->last_slot()) {
+            return { slot, kIsExists };
         }
 
-        if (this->need_grow() || (dist_and_0.getDist() > static_cast<udist_type>(kMaxDist))) {
+        if (this->need_grow()) {
             // The size of slot reach the slot threshold or hashmap is full.
             this->grow_if_necessary();
 
-            ctrl = this->indirect_find_failed(hash_code, dist_and_0);
+            ctrl = this->indirect_find_failed(key);
         }
 
         size_type new_slot_index = this->slot_size_;
-        dist_and_hash.mergeHash(dist_and_0, ctrl_hash);
-        dist_and_hash.setIndex(static_cast<slot_index_t>(new_slot_index));
-
         slot_type * new_slot = this->slot_at(new_slot_index);
 
         if (ctrl->is_empty()) {
@@ -1819,7 +1617,7 @@ InsertOrGrow_Start:
     find_failed(std::size_t hash_code, ctrl_type & o_dist_and_0) {
         size_type slot_index = this->index_for_hash(hash_code);
         ctrl_type * ctrl = this->ctrl_at(slot_index);
-        ctrl_type * last_ctrl = this->ctrls() + this->slot_capacity();
+        ctrl_type * last_ctrl = this->last_ctrl();
 
         ctrl_type dist_and_0;
         while (dist_and_0.value <= ctrl->value) {

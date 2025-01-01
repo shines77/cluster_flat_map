@@ -42,6 +42,12 @@
     <Filter Include="src\jstd\string">
       <UniqueIdentifier>{54b52a40-e184-488d-b27d-ae4b4e183090}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\jstd\lang">
+      <UniqueIdentifier>{1caef1d6-8df0-489d-b6af-ef1d5b777e07}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\jstd\memory">
+      <UniqueIdentifier>{1a6e35fd-b539-4f4f-8ca5-6bbebbbfce05}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\jstd\hashmap\cluster_flat_map.hpp">
@@ -214,6 +220,24 @@
     </ClInclude>
     <ClInclude Include="..\..\..\src\jstd\iterator.h">
       <Filter>src\jstd</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_slot_storage.hpp">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\map_slot_policy.h">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\slot_policy_traits.h">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\lang\launder.h">
+      <Filter>src\jstd\lang</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\memory\memory_barrier.h">
+      <Filter>src\jstd\memory</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_slot_policy.hpp">
+      <Filter>src\jstd\hashmap</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

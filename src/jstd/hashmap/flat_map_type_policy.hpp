@@ -58,7 +58,7 @@
 namespace jstd {
 
 template <typename Key, typename Value>
-class flat_map_type_policy
+class JSTD_DLL flat_map_type_policy
 {
 public:
     typedef Key                                             key_type;
