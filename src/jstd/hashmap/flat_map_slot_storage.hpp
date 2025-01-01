@@ -53,6 +53,8 @@
 
 #include <type_traits>
 
+#include "jstd/basic/stddef.h"
+
 namespace jstd {
 
 template <typename TypePolicy,
@@ -81,8 +83,6 @@ public:
     const value_type * slots() const {
         return reinterpret_cast<const value_type *>(this->slots_);
     }
-
-
 
 private:
     value_type slots_;

@@ -20,7 +20,7 @@
 
 #include <type_traits>
 
-#include "jstd/config/config.h"
+#include "jstd/basic/stddef.h"
 #include "jstd/lang/launder.h"
 #include "jstd/traits/type_traits.h"
 

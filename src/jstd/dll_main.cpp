@@ -1,5 +1,5 @@
 
-//#include "jstd/hashmap/cluster_flat_map.hpp"
+#include "jstd/hashmap/cluster_flat_map.hpp"
 
 #include <utility>
 #include <type_traits>

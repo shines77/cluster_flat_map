@@ -15,10 +15,13 @@
 
 ************************************************************************************/
 
-#ifndef JSTD_HASHMAP_MAP_SLOT_POLICY_HPP
-#define JSTD_HASHMAP_MAP_SLOT_POLICY_HPP
+#ifndef JSTD_HASHMAP_FLAT_MAP_SLOT_POLICY_HPP
+#define JSTD_HASHMAP_FLAT_MAP_SLOT_POLICY_HPP
 
 #pragma once
+
+#include "jstd/basic/stddef.h"
+#include "jstd/hashmap/map_slot_policy.h"
 
 namespace jstd {
 
@@ -102,4 +105,4 @@ public:
 
 } // namespace jstd
 
-#endif // JSTD_HASHMAP_MAP_SLOT_POLICY_HPP
+#endif // JSTD_HASHMAP_FLAT_MAP_SLOT_POLICY_HPP

@@ -54,6 +54,7 @@
 #include <cstdint>
 #include <assert.h>
 
+#include "jstd/basic/stddef.h"
 #include "jstd/support/BitVec.h"
 #include "jstd/memory/memory_barrier.h"
 

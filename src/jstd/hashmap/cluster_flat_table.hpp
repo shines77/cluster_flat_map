@@ -51,6 +51,7 @@
 
 #pragma once
 
+#define NOMINMAX
 #include <stdint.h>
 
 #include <cstdint>
@@ -75,6 +76,11 @@
 #include "jstd/hashmap/flat_map_iterator.hpp"
 #include "jstd/hashmap/flat_map_cluster.hpp"
 
+#include "jstd/hashmap/flat_map_type_policy.hpp"
+#include "jstd/hashmap/flat_map_slot_policy.hpp"
+#include "jstd/hashmap/slot_policy_traits.h"
+#include "jstd/hashmap/flat_map_slot_storage.hpp"
+
 #define CLUSTER_USE_SEPARATE_SLOTS  1
 
 namespace jstd {
@@ -96,6 +102,7 @@ public:
     typedef Hash                                hasher;
     typedef KeyEqual                            key_equal;
     typedef Allocator                           allocator_type;
+    typedef typename Hash::result_type          hash_result_t;
 
     typedef value_type &                        reference;
     typedef value_type const &                  const_reference;
@@ -149,7 +156,11 @@ public:
     static constexpr bool kIsIndirectKV = kIsIndirectKey | kIsIndirectValue;
     static constexpr bool kNeedStoreHash = true;
 
-    using slot_type = flat_map_slot_storage<type_policy, kIsIndirectKey, kIsIndirectValue>;
+    using slot_type = map_slot_type<key_type, mapped_type>;
+    using slot_policy_t = flat_map_slot_policy<key_type, mapped_type, slot_type>;
+    using SlotPolicyTraits = slot_policy_traits<slot_policy_t>;
+
+    //using slot_type = flat_map_slot_storage<type_policy, kIsIndirectKey, kIsIndirectValue>;
 
     static constexpr size_type kCacheLineSize = 64;
     static constexpr size_type kActualSlotAlignment = alignof(slot_type);
@@ -170,6 +181,16 @@ public:
 
     static constexpr size_type kSkipGroupsLimit = 5;
 
+    using group_allocator_type = typename std::allocator_traits<allocator_type>::template rebind_alloc<group_type>;
+    using ctrl_allocator_type = typename std::allocator_traits<allocator_type>::template rebind_alloc<ctrl_type>;
+    using slot_allocator_type = typename std::allocator_traits<allocator_type>::template rebind_alloc<slot_type>;
+
+    using AllocTraits = std::allocator_traits<allocator_type>;
+    using SlotAlloc = typename std::allocator_traits<allocator_type>::template rebind_alloc<slot_type>;
+    using SlotAllocTraits = typename std::allocator_traits<allocator_type>::template rebind_traits<slot_type>;
+
+    using hash_policy_t = typename hash_policy_selector<Hash>::type;
+
 private:
     group_type *    groups_;
     size_type       slot_size_;
@@ -181,13 +202,16 @@ private:
     size_type       mlf_;
 
 #if CLUSTER_USE_HASH_POLICY
-    hash_policy     hash_policy_;
+    hash_policy_t           hash_policy_;
 #endif
 
-    hasher          hasher_;
-    key_equal       key_equal_;
+    hasher                  hasher_;
+    key_equal               key_equal_;
 
-    allocator_type  allocator_;
+    allocator_type          allocator_;
+    group_allocator_type    group_allocator_;
+    ctrl_allocator_type     ctrl_allocator_;
+    slot_allocator_type     slot_allocator_;
 
     enum FindResult {
         kNeedGrow = -1,
@@ -228,16 +252,58 @@ public:
     ///
     /// Observers
     ///
-    allocator_type get_allocator() const noexcept {
-        return allocator_;
-    }
-
     hasher hash_function() const noexcept {
         return this->hasher_;
     }
 
     key_equal key_eq() const noexcept {
         return this->key_equal_;
+    }
+
+    allocator_type get_allocator() const noexcept {
+        return this->allocator_;
+    }
+
+    group_allocator_type get_group_allocator_() noexcept {
+        return this->group_allocator_;
+    }
+
+    ctrl_allocator_type get_ctrl_allocator() const noexcept {
+        return this->ctrl_allocator_;
+    }
+
+    slot_allocator_type get_slot_allocator() const noexcept {
+        return this->slot_allocator_;
+    }
+
+    hasher & hash_function_ref() noexcept {
+        return this->hasher_;
+    }
+
+    key_equal & key_eq_ref() noexcept {
+        return this->key_equal_;
+    }
+
+#if CLUSTER_USE_HASH_POLICY
+    hash_policy_t & hash_policy_ref() noexcept {
+        return this->hash_policy_;
+    }
+#endif
+
+    allocator_type & get_allocator_ref() noexcept {
+        return this->allocator_;
+    }
+
+    group_allocator_type & get_group_allocator_ref() noexcept {
+        return this->group_allocator_;
+    }
+
+    ctrl_allocator_type & get_ctrl_allocator_ref() noexcept {
+        return this->ctrl_allocator_;
+    }
+
+    slot_allocator_type & get_slot_allocator_ref() noexcept {
+        return this->slot_allocator_;
     }
 
     static const char * name() noexcept {
@@ -263,7 +329,7 @@ public:
     size_type size() const noexcept { return this->slot_size(); }
     size_type capacity() const noexcept { return this->slot_capacity(); }
     size_type max_size() const noexcept {
-        return std::numeric_limits<difference_type>::max() / sizeof(value_type);
+        return std::numeric_limits<difference_type>::(max)() / sizeof(value_type);
     }
 
     size_type slot_size() const { return this->slot_size_; }
