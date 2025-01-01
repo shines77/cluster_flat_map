@@ -52,8 +52,10 @@
 #pragma once
 
 #include <type_traits>
+#include <utility>
 
 #include "jstd/basic/stddef.h"
+#include "jstd/traits/type_traits.h"
 #include "jstd/hashmap/map_types_constructibility.hpp"
 
 namespace jstd {

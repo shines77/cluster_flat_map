@@ -20,7 +20,10 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include "jstd/basic/stddef.h"
+#include "jstd/traits/type_traits.h"
 #include "jstd/hashmap/map_slot_policy.h"
 
 namespace jstd {

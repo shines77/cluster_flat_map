@@ -51,7 +51,9 @@
 
 #pragma once
 
-#include <xutility>
+#include <iterator>     // For std::forward_iterator_tag
+#include <type_traits>  // For std::conditional, and so on...
+#include <memory>       // For std::addressof()
 
 namespace jstd {
 

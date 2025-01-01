@@ -54,12 +54,11 @@
 #include <stdint.h>
 
 #include <cstdint>
-#include <memory>
-
-#include <cstdint>
+#include <memory>               // For std::allocator<T>
+#include <functional>           // For std::hash<Key>
 #include <initializer_list>
 #include <type_traits>
-#include <utility>
+#include <utility>              // For std::pair<F, S>
 
 #include "jstd/hashmap/detail/hashmap_traits.h"
 #include "jstd/hashmap/flat_map_type_policy.hpp"

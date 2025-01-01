@@ -19,6 +19,7 @@
 #pragma once
 
 #include <type_traits>
+#include <meomry>
 
 #include "jstd/basic/stddef.h"
 #include "jstd/lang/launder.h"

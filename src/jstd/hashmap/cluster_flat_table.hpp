@@ -55,13 +55,11 @@
 #include <stdint.h>
 
 #include <cstdint>
-#include <memory>
-
-#include <cstdint>
-#include <limits>
+#include <memory>           // For std::allocator<T>
+#include <limits>           // For std::numeric_limits<T>
 #include <initializer_list>
 #include <type_traits>
-#include <utility>
+#include <utility>          // For std::pair<F, S>
 
 #include <assert.h>
 

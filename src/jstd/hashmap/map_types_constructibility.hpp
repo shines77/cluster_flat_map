@@ -52,6 +52,8 @@
 #pragma once
 
 #include <type_traits>
+#include <utility>      // For std::pair<F, S>
+#include <memory>       // For std::allocator<T>
 
 namespace jstd {
 
