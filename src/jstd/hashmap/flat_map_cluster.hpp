@@ -124,6 +124,10 @@ public:
         return this->value;
     }
 
+    inline value_type get_index() const {
+        return 0;
+    }
+
     inline void set_empty() {
         this->value = kEmptySlot;
     }
@@ -289,7 +293,6 @@ public:
             match_mask = _mm_cmpeq_epi8(_mm_and_si128(ctrl_bits, mask_bits), empty_bits);
         }
         
-        __m128i match_mask = _mm_cmpgt_epi8(_mm_and_si128(ctrl_bits, mask_bits), empty_bits);
         int mask = _mm_movemask_epi8(match_mask);
         if (kEmptySlot != 0b00000000 && kEmptySlot != 0b11111111) {
             mask = ~mask & 0xFFFF;

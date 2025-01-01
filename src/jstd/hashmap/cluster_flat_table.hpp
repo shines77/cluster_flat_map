@@ -120,7 +120,7 @@ public:
     using ctrl_type = cluster_meta_ctrl;
     using group_type = flat_map_cluster16<cluster_meta_ctrl>;
 
-    static constexpr size_type kGroupSize = group_type::kSlotCount;
+    static constexpr size_type kGroupSize = group_type::kGroupSize;
 
     static constexpr bool is_slot_trivial_copyable =
             (std::is_trivially_copyable<value_type>::value ||
@@ -1068,8 +1068,8 @@ private:
                       "jstd::cluster_flat_map::AlignedSlots<N>(): SlotAlignment must bigger than 0.");
         static_assert(((SlotAlignment & (SlotAlignment - 1)) == 0),
                       "jstd::cluster_flat_map::AlignedSlots<N>(): SlotAlignment must be power of 2.");
-        const ctrl_type * last_ctrl = ctrls + ctrl_capacity;
-        size_type last_ctrl = reinterpret_cast<size_type>(last_ctrl);
+        const ctrl_type * last_ctrls = ctrls + ctrl_capacity;
+        size_type last_ctrl = reinterpret_cast<size_type>(last_ctrls);
         size_type slots_first = (last_ctrl + SlotAlignment - 1) & (~(SlotAlignment - 1));
         size_type slots_padding = static_cast<size_type>(slots_first - last_ctrl);
         slot_type * slots = reinterpret_cast<slot_type *>((char *)last_ctrl + slots_padding);
@@ -1536,7 +1536,7 @@ private:
         const group_type * last_group = this->last_group();
         
         size_type skip_groups = 0;
-        size_type cltr_base = group_index * kGroupSize;
+        size_type slot_base = group_index * kGroupSize;
 
         for (;;) {
             std::uint32_t match_mask = group->match_hash(ctrl_hash);
@@ -1553,7 +1553,7 @@ private:
                             return slot_pos;
                         }
                     } else {
-                        KeyT & ind_key = template this->slot_key_at<KeyT>(slot->value.first);
+                        KeyT & ind_key = this->slot_key_at<KeyT>(slot->value.first);
                         if (this->key_equal_(ind_key, key)) {
                             return slot_pos;
                         }
@@ -1609,14 +1609,13 @@ private:
             slot = find_info.second;
         }
 
-        dist_and_hash.mergeHash(dist_and_0, ctrl_hash);
-        //return { slot, kIsNotExists };
+        std::uint8_t ctrl_hash = 0;
 
         if (ctrl->is_empty()) {
-            this->set_used_ctrl(ctrl, dist_and_hash);
+            this->set_used_ctrl(ctrl, ctrl_hash);
             return { slot, kIsNotExists };
         } else {
-            FindResult neednt_grow = this->insert_to_place<false>(ctrl, slot, dist_and_hash);
+            FindResult neednt_grow = this->insert_to_place<false>(ctrl, slot, ctrl_hash);
             return { slot, neednt_grow };
         }
     }
@@ -1649,9 +1648,10 @@ private:
         }
     }
 
+    template <typename KeyT>
     JSTD_FORCED_INLINE
     std::pair<ctrl_type *, slot_type *>
-    find_failed(std::size_t hash_code, ctrl_type & o_dist_and_0) {
+    find_failed(const KeyT & key) {
         size_type slot_index = this->index_for_hash(hash_code);
         ctrl_type * ctrl = this->ctrl_at(slot_index);
         ctrl_type * last_ctrl = this->last_ctrl();
@@ -1668,9 +1668,9 @@ private:
         return { ctrl, slot };
     }
 
+    template <typename KeyT>
     JSTD_FORCED_INLINE
-    ctrl_type *
-    indirect_find_failed(std::size_t hash_code, ctrl_type & o_dist_and_0) {
+    ctrl_type * indirect_find_failed(const KeyT & key) {
         size_type ctrl_index = this->index_for_hash(hash_code);
         ctrl_type * ctrl = this->ctrl_at(ctrl_index);
         ctrl_type * last_ctrl = this->ctrls() + this->slot_capacity();
