@@ -115,7 +115,7 @@ public:
     static constexpr bool kEnableExchange = true;
 
     static constexpr bool kIsTransparent = (detail::is_transparent<Hash>::value && detail::is_transparent<KeyEqual>::value);
-    static constexpr bool kIsLayoutCompatible = jstd::is_layout_compatible_kv<K, V>::value;
+    static constexpr bool kIsLayoutCompatible = jstd::is_layout_compatible_kv<key_type, mapped_type>::value;
 
     static constexpr size_type npos = static_cast<size_type>(-1);
 
