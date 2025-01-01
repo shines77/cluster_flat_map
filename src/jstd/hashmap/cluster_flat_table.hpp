@@ -2015,8 +2015,8 @@ private:
         std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
         size_type group_index = slot_index / kGroupSize;
         size_type group_pos = slot_index % kGroupSize;
-        const group_type * group = this->group_at(group_index);
-        const group_type * last_group = this->last_group();
+        group_type * group = this->group_at(group_index);
+        group_type * last_group = this->last_group();
         
         size_type skip_groups = 0;
         size_type slot_base = group_index * kGroupSize;
