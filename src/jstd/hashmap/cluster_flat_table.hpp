@@ -394,10 +394,10 @@ public:
         return reinterpret_cast<const ctrl_type *>(this->groups());
     }
 
-    ctrl_type * last_ctrls() {
+    ctrl_type * last_ctrl() {
         return (this->ctrls() + this->slot_capacity());
     }
-    const ctrl_type * last_ctrls() const {
+    const ctrl_type * last_ctrl() const {
         return (this->ctrls() + this->slot_capacity());
     }
 
@@ -1053,11 +1053,11 @@ private:
                       "jstd::cluster_flat_map::AlignedSlots<N>(): SlotAlignment must bigger than 0.");
         static_assert(((SlotAlignment & (SlotAlignment - 1)) == 0),
                       "jstd::cluster_flat_map::AlignedSlots<N>(): SlotAlignment must be power of 2.");
-        const ctrl_type * last_ctrls = ctrls + ctrl_capacity;
-        size_type last_ctrl = reinterpret_cast<size_type>(last_ctrls);
+        const ctrl_type * last_ctrl = ctrls + ctrl_capacity;
+        size_type last_ctrl = reinterpret_cast<size_type>(last_ctrl);
         size_type slots_first = (last_ctrl + SlotAlignment - 1) & (~(SlotAlignment - 1));
         size_type slots_padding = static_cast<size_type>(slots_first - last_ctrl);
-        slot_type * slots = reinterpret_cast<slot_type *>((char *)last_ctrls + slots_padding);
+        slot_type * slots = reinterpret_cast<slot_type *>((char *)last_ctrl + slots_padding);
         return slots;
     }
 
@@ -1076,7 +1076,7 @@ private:
     template <bool Initialize = false>
     void create_slots(size_type init_capacity) {
         if (init_capacity == 0) {
-            if (!initialize) {
+            if (!Initialize) {
                 this->destroy_data();
             }
             this->reset<Initialize>();

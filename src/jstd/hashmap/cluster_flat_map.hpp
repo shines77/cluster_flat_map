@@ -214,7 +214,7 @@ public:
     }
 
     static const char * name() noexcept {
-        return table_.name();
+        return table_type::name();
     }
 
     ///
