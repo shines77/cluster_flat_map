@@ -80,7 +80,11 @@
 #include "jstd/hashmap/slot_policy_traits.h"
 #include "jstd/hashmap/flat_map_slot_storage.hpp"
 
+#define CLUSTER_USE_HASH_POLICY     0
 #define CLUSTER_USE_SEPARATE_SLOTS  1
+#define CLUSTER_USE_SWAP_TRAITS     1
+
+#define CLUSTER_USE_GROUP_SCAN      1
 
 namespace jstd {
 
@@ -237,11 +241,8 @@ private:
     ctrl_allocator_type     ctrl_allocator_;
     slot_allocator_type     slot_allocator_;
 
-    enum FindResult {
-        kNeedGrow = -1,
-        kIsNotExists = 0,
-        kIsExists = 1
-    };
+    static constexpr bool kIsNotExists = false;
+    static constexpr bool kIsExists = true;
 
     static constexpr size_type calcDefaultLoadFactor(size_type capacity) {
         return capacity * kDefaultMaxLoadFactor / kLoadFactorAmplify;
@@ -396,6 +397,10 @@ public:
         return ((double)this->mlf_ / kLoadFactorAmplify);
     }
 
+    void max_load_factor(double mlf) const {
+        // TODO: mlf
+    }
+
     ///
     /// Pointers
     ///
@@ -450,7 +455,7 @@ public:
 
     void rehash(size_type new_capacity, bool read_only = false) {
         if (!read_only)
-            new_capacity = (std::max)(this->min_require_capacity(new_capacity), this->slot_size());
+            new_capacity = (std::max)(this->shrink_to_fit_capacity(new_capacity), this->slot_size());
         else
             new_capacity = (std::max)(new_capacity, this->slot_size());
         this->rehash_impl<true, false>(new_capacity);
@@ -459,7 +464,7 @@ public:
     void shrink_to_fit(bool read_only = false) {
         size_type new_capacity;
         if (!read_only)
-            new_capacity = this->min_require_capacity(this->slot_size());
+            new_capacity = this->shrink_to_fit_capacity(this->slot_size());
         else
             new_capacity = this->slot_size();
         this->rehash_impl<true, false>(new_capacity);
@@ -486,11 +491,8 @@ public:
     }
 
     const_iterator find(const key_type & key) const {
-        const slot_type * slot = this->find_impl(key);
-        if (!kIsIndirectKV)
-            return this->iterator_at(this->index_of(slot));
-        else
-            return this->iterator_at(slot);
+        size_type slot_index = this->find_index(key);
+        return this->iterator_at(slot_index);
     }
 
     template <typename KeyT>
@@ -500,11 +502,8 @@ public:
 
     template <typename KeyT>
     const_iterator find(const KeyT & key) const {
-        const slot_type * slot = this->find_impl(key);
-        if (!kIsIndirectKV)
-            return this->iterator_at(this->index_of(slot));
-        else
-            return this->iterator_at(slot);
+        size_type slot_index = this->find_index(key);
+        return this->iterator_at(slot_index);
     }
 
     ///
@@ -732,20 +731,7 @@ private:
         return (now_slot_capacity * this->mlf_ / kLoadFactorAmplify);
     }
 
-    size_type calc_max_lookups(size_type new_capacity) const {
-        assert(new_capacity > 1);
-        assert(pow2::is_pow2(new_capacity));
-#if 1
-        // Fast to get log2_int, if the new_size is power of 2.
-        // Use bsf(n) has the same effect.
-        size_type max_lookups = size_type(BitUtils::bsr(new_capacity));
-#else
-        size_type max_lookups = size_type(pow2::log2_int<size_type, size_type(2)>(new_capacity));
-#endif
-        return max_lookups;
-    }
-
-    inline size_type min_require_capacity(size_type init_capacity) const {
+    inline size_type shrink_to_fit_capacity(size_type init_capacity) const {
         size_type new_capacity = init_capacity * kLoadFactorAmplify / this->mlf_;
         return new_capacity;
     }
@@ -849,14 +835,14 @@ private:
     }
 
     //
-    // Do the second hash on the basis of hash code for the index_for_hash().
+    // Do the index hash on the basis of hash code for the index_for_hash().
     //
-    inline std::size_t second_hasher(std::size_t value) const noexcept {
+    inline std::size_t index_hasher(std::size_t value) const noexcept {
         return value;
     }
 
     //
-    // Do the third hash on the basis of hash code for the ctrl hash.
+    // Do the ctrl hash on the basis of hash code for the ctrl hash.
     //
     inline std::size_t ctrl_hasher(std::size_t hash_code) const noexcept {
 #if CLUSTER_USE_HASH_POLICY
@@ -868,7 +854,6 @@ private:
 #endif
     }
 
-    // Maybe call the second hash
     inline size_type index_for_hash(std::size_t hash_code) const noexcept {
         std::size_t hash_value = hash_code;
 #if CLUSTER_USE_HASH_POLICY
@@ -878,7 +863,7 @@ private:
         size_type index = this->hash_policy_.template index_for_hash<key_type>(hash_value, this->slot_mask());
         return index;
 #else
-        hash_value = this->second_hasher(hash_value);
+        hash_value = this->index_hasher(hash_value);
         if (kUseIndexSalt) {
             hash_value ^= this->index_salt();
         }
@@ -886,31 +871,27 @@ private:
 #endif
     }
 
-    // Maybe call the third hash to calculate the ctrl hash.
     inline std::uint8_t get_ctrl_hash(std::size_t hash_code) const noexcept {
-        std::uint8_t ctrl_hash;
-        if (kNeedStoreHash)
-            ctrl_hash = ctrl_type::hash_bits(this->ctrl_hasher(hash_code));
-        else
-            ctrl_hash = std::uint8_t(0);
+        std::size_t ctrl_hash = this->ctrl_hasher(hash_code);
+        std::uint8_t ctrl_hash = ctrl_type::hash_bits(ctrl_hash);
         return ctrl_hash;
     }
 
-    size_type index_of(iterator pos) const {
+    size_type index_of(iterator iter) const {
         if (!kIsIndirectKV) {
-            return pos.index();
+            return iter.index();
         } else {
-            const slot_type * slot = pos.slot();
+            const slot_type * slot = iter.slot();
             size_type ctrl_index = this->bucket(slot->key);
             return ctrl_index;
         }
     }
 
-    size_type index_of(const_iterator pos) const {
+    size_type index_of(const_iterator iter) const {
         if (!kIsIndirectKV) {
-            return pos.index();
+            return iter.index();
         } else {
-            const slot_type * slot = pos.slot();
+            const slot_type * slot = iter.slot();
             size_type ctrl_index = this->bucket(slot->key);
             return ctrl_index;
         }
@@ -972,12 +953,23 @@ private:
         new (slot) slot_type;
     }
 
+    JSTD_FORCED_INLINE
+    void init_ctrls(ctrl_type * ctrls, size_type slot_capacity) {
+        ctrl_type * ctrl = ctrls;
+        ctrl_type * last_ctrl = ctrls + slot_capacity;
+        group_type * group = reinterpret_cast<group_type *>(ctrls);
+        group_type * last_group = reinterpret_cast<group_type *>(last_ctrl);
+        for (; group < last_group; ++group) {
+            group->init();
+        }
+    }
+
     void destroy() {
         this->destroy_data();
     }
 
     void destroy_data() {
-        // Note!!: destroy_slots() need use this->ctrls()
+        // Note!!: destroy_slots() need use this->ctrls(), so must destroy slots first.
         this->destroy_slots();
         this->destroy_ctrls();
     }
@@ -992,6 +984,8 @@ private:
         }
         this->slots_ = nullptr;
         this->slot_size_ = 0;
+        this->slot_mask_ = 0;
+        this->slot_threshold_ = 0;
     }
 
     void destroy_ctrls() noexcept {
@@ -1009,28 +1003,42 @@ private:
     }
 
     void clear_data() {
-        // Note!!: clear_slots() need use this->ctrls()
+        // Note!!: clear_slots() need use this->ctrls(), so must clear slots first.
         this->clear_slots();
-        this->clear_ctrls(this->ctrls(), this->slot_capacity());
+        this->clear_ctrls();
+    }
+
+    void clear_ctrls(ctrl_type * ctrls, size_type slot_capacity) {
+        init_ctrls(ctrls, slot_capacity);
     }
 
     JSTD_FORCED_INLINE
     void clear_slots() {
         if (!is_slot_trivial_destructor) {
             if (!kIsIndirectKV) {
+#if CLUSTER_USE_GROUP_SCAN
+                group_type * group = this->groups();
+                group_type * last_group = this->last_group();
+                size_type slot_base = 0;
+                for (; group < last_group; ++group) {
+                    std::uint32_t used_mask = group->match_used();
+                    while (used_mask != 0) {
+                        std::uint32_t used_pos = BitUtils::bsf32(used_mask);
+                        used_mask = BitUtils::clearLowBit32(used_mask);
+                        size_type slot_index = slot_base + used_pos;
+                        this->destroy_slot(slot_index);
+                    }
+                    slot_base += kGroupSize;
+                }
+#else
                 ctrl_type * ctrl = this->ctrls();
-                assert(ctrl != nullptr);
-                for (size_type index = 0; index < this->slot_capacity(); index++) {
+                for (size_type slot_index = 0; slot_index < this->slot_capacity(); slot_index++) {
                     if (ctrl->is_used()) {
-                        if (!kIsIndirectKV) {
-                            this->destroy_slot(index);
-                        } else {
-                            size_type slot_index = ctrl->get_index();
-                            this->destroy_slot(slot_index);
-                        }
+                        this->destroy_slot(slot_index);
                     }
                     ctrl++;
                 }
+#endif
             } else {
                 for (size_type slot_index = 0; slot_index < this->size(); slot_index++) {
                     this->destroy_slot(slot_index);
@@ -1041,22 +1049,12 @@ private:
         this->slot_size_ = 0;
     }
 
-    JSTD_FORCED_INLINE
-    void clear_ctrls(ctrl_type * ctrls, size_type slot_capacity) {
-        ctrl_type * ctrl = ctrls;
-        ctrl_type * last_ctrl = ctrls + slot_capacity;
-        group_type * group = reinterpret_cast<group_type *>(ctrls);
-        group_type * last_group = reinterpret_cast<group_type *>(last_ctrl);
-        for (; group < last_group; ++group) {
-            group->init();
-        }
-    }
-
     inline bool need_grow() const {
         return (this->slot_size() >= this->slot_threshold());
     }
 
     void grow_if_necessary() {
+        // The growth rate is 2 times
         size_type new_capacity = (this->slot_mask_ + 1) * 2;
         this->rehash_impl<false, true>(new_capacity);
     }
@@ -1075,7 +1073,7 @@ private:
 #endif
     }
 
-    bool isValidCapacity(size_type capacity) const {
+    bool is_valid_capacity(size_type capacity) const {
         return ((capacity >= kMinCapacity) && pow2::is_pow2(capacity));
     }
 
@@ -1220,10 +1218,7 @@ private:
                     slot_type * old_slot = old_slots;
                     for (ctrl_type * ctrl = old_ctrls; ctrl != last_ctrl; ctrl++) {
                         if (likely(ctrl->is_used())) {
-                            if (!kNeedStoreHash)
-                                this->insert_no_grow(old_slot);
-                            else
-                                this->insert_no_grow(old_slot, ctrl->get_hash());
+                            this->insert_no_grow(old_slot, ctrl->get_hash());
                             this->destroy_slot(old_slot);
                         }
                         old_slot++;
@@ -1707,15 +1702,6 @@ private:
 
     template <typename KeyT>
     const slot_type * find_impl(const KeyT & key) const {
-        if (!kIsIndirectKV) {
-            return this->direct_find(key);
-        } else {
-            return this->indirect_find(key);
-        }
-    }
-
-    template <typename KeyT>
-    const slot_type * direct_find(const KeyT & key) const {
         std::size_t hash_code = this->get_hash(key);
         size_type slot_index = this->index_for_hash(hash_code);
         std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
@@ -1732,8 +1718,7 @@ private:
             if (match_mask != 0) {
                 do {
                     std::uint32_t match_pos = BitUtils::bsf32(match_mask);
-                    std::uint32_t match_bit = BitUtils::ls1b32(match_mask);
-                    match_mask ^= match_bit;
+                    match_mask = BitUtils::clearLowBit32(match_mask);
 
                     size_type slot_pos = slot_base + match_pos;
                     const slot_type * slot = this->slot_at(slot_pos);
@@ -1755,56 +1740,7 @@ private:
             }
             skip_groups++;
             if (skip_groups > kSkipGroupsLimit) {
-                std::cout << "direct_find(): key = " << key <<
-                             ", skip_groups = " << skip_groups << std::endl;
-            }
-            if (skip_groups >= this->group_capacity()) {
-                return this->last_slot();
-            }
-        }
-    }
-
-    template <typename KeyT>
-    const slot_type * indirect_find(const KeyT & key) const {
-        std::size_t hash_code = this->get_hash(key);
-        size_type slot_index = this->index_for_hash(hash_code);
-        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
-        size_type group_index = slot_index / kGroupSize;
-        size_type group_pos = slot_index % kGroupSize;
-        const group_type * group = this->group_at(group_index);
-
-        size_type slot_base = group_index * kGroupSize;
-        size_type skip_groups = 0;
-
-        for (;;) {
-            std::uint32_t match_mask = group->match_hash(ctrl_hash);
-            if (match_mask != 0) {
-                do {
-                    std::uint32_t match_pos = BitUtils::bsf32(match_mask);
-                    std::uint32_t match_bit = BitUtils::ls1b32(match_mask);
-                    match_mask ^= match_bit;
-
-                    size_type slot_pos = slot_base + match_pos;
-                    const slot_type * slot = this->slot_at(slot_pos);
-                    if (this->key_equal_(slot->value.first, key)) {
-                        return slot;
-                    }
-                } while (match_mask != 0);
-            } else {
-                // If it doesn't overflow, means it hasn't been found.
-                if (!group->is_overflow(group_pos)) {
-                    return this->last_slot();
-                }
-            }
-            slot_base += kGroupSize;
-            group++;
-            if (group >= last_group) {
-                group = this->groups();
-                slot_base = 0;
-            }
-            skip_groups++;
-            if (skip_groups > kSkipGroupsLimit) {
-                std::cout << "indirect_find(): key = " << key <<
+                std::cout << "find_impl(): key = " << key <<
                              ", skip_groups = " << skip_groups << std::endl;
             }
             if (skip_groups >= this->group_capacity()) {
@@ -1820,15 +1756,6 @@ private:
 
     template <typename KeyT>
     size_type find_index(const KeyT & key) const {
-        if (!kIsIndirectKV) {
-            return this->direct_find_index<KeyT>(key);
-        } else {
-            return this->indirect_find_index<KeyT>(key);
-        }
-    }
-
-    template <typename KeyT>
-    size_type direct_find_index(const KeyT & key) const {
         std::size_t hash_code = this->get_hash(key);
         size_type slot_index = this->index_for_hash(hash_code);
         std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
@@ -1845,8 +1772,7 @@ private:
             if (match_mask != 0) {
                 do {
                     std::uint32_t match_pos = BitUtils::bsf32(match_mask);
-                    std::uint32_t match_bit = BitUtils::ls1b32(match_mask);
-                    match_mask ^= match_bit;
+                    match_mask = BitUtils::clearLowBit32(match_mask);
 
                     size_type slot_pos = slot_base + match_pos;
                     const slot_type * slot = this->slot_at(slot_pos);
@@ -1868,143 +1794,13 @@ private:
             }
             skip_groups++;
             if (skip_groups > kSkipGroupsLimit) {
-                std::cout << "direct_find_index(): key = " << key <<
+                std::cout << "find_index(): key = " << key <<
                              ", skip_groups = " << skip_groups << std::endl;
             }
             if (skip_groups >= this->group_capacity()) {
                 return this->slot_capacity();
             }
         }
-    }
-
-    template <typename KeyT>
-    KeyT & slot_key_at(size_type index) {
-        return this->key_arrays_[index];
-    }
-
-    template <typename KeyT>
-    size_type indirect_find_index(const KeyT & key) const {
-        if (!kIsIndirectKV) {
-            assert(false);
-        }
-
-        std::size_t hash_code = this->get_hash(key);
-        size_type slot_index = this->index_for_hash(hash_code);
-        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
-        size_type group_index = slot_index / kGroupSize;
-        size_type group_pos = slot_index % kGroupSize;
-        const group_type * group = this->group_at(group_index);
-        const group_type * last_group = this->last_group();
-        
-        size_type slot_base = group_index * kGroupSize;
-        size_type skip_groups = 0;
-
-        for (;;) {
-            std::uint32_t match_mask = group->match_hash(ctrl_hash);
-            if (match_mask != 0) {
-                do {
-                    std::uint32_t match_pos = BitUtils::bsf32(match_mask);
-                    std::uint32_t match_bit = BitUtils::ls1b32(match_mask);
-                    match_mask ^= match_bit;
-
-                    size_type slot_pos = slot_base + match_pos;
-                    const slot_type * slot = this->slot_at(slot_pos);
-                    if (!kIsIndirectKey) {
-                        if (this->key_equal_(slot->value.first, key)) {
-                            return slot_pos;
-                        }
-                    } else {
-                        KeyT & ind_key = this->slot_key_at<KeyT>(slot->value.first);
-                        if (this->key_equal_(ind_key, key)) {
-                            return slot_pos;
-                        }
-                    }
-                } while (match_mask != 0);
-            } else {
-                // If it doesn't overflow, means it hasn't been found.
-                if (!group->is_overflow(group_pos)) {
-                    return this->slot_capacity();
-                }
-            }
-            slot_base += kGroupSize;
-            group++;
-            if (group >= last_group) {
-                group = this->groups();
-                slot_base = 0;
-            }
-            skip_groups++;
-            if (skip_groups > kSkipGroupsLimit) {
-                std::cout << "indirect_find_index(): key = " << key <<
-                             ", skip_groups = " << skip_groups << std::endl;
-            }
-            if (skip_groups >= this->group_capacity()) {
-                return this->slot_capacity();
-            }
-        }
-    }
-
-    template <typename KeyT>
-    std::pair<slot_type *, FindResult>
-    find_or_insert(const KeyT & key) {
-        if (!kIsIndirectKV) {
-            return this->direct_find_or_insert(key);
-        } else {
-            return this->indirect_find_or_insert(key);
-        }
-    }
-
-    template <typename KeyT>
-    JSTD_FORCED_INLINE
-    std::pair<slot_type *, FindResult>
-    direct_find_or_insert(const KeyT & key) {
-        size_type slot_index = this->find_index(key);
-        if (slot_index != this->slot_capacity()) {
-            const slot_type * slot = this->slot_at(slot_index);
-            return { slot, kIsExists };
-        }
-
-        if (this->need_grow()) {
-            // The size of slot reach the slot threshold or hashmap is full.
-            this->grow_if_necessary();
-        }
-
-        slot_index = this->find_failed(key);
-        slot_type * slot = this->slot_at(slot_index);
-        ctrl_type * ctrl = this->ctrl_at(slot_index);
-
-        std::uint8_t ctrl_hash = 0;
-
-        assert(ctrl->is_empty());
-        this->set_used_ctrl(ctrl, ctrl_hash);
-        return { slot, kIsNotExists };
-    }
-
-    template <typename KeyT>
-    JSTD_FORCED_INLINE
-    std::pair<slot_type *, FindResult>
-    indirect_find_or_insert(const KeyT & key) {
-        size_type slot_index = this->find_index(key);
-        if (slot_index != this->slot_capacity()) {
-            const slot_type * slot = this->slot_at(slot_index);
-            return { slot, kIsExists };
-        }
-
-        if (this->need_grow()) {
-            // The size of slot reach the slot threshold or hashmap is full.
-            this->grow_if_necessary();
-        }
-
-        slot_index = this->find_failed(key);
-        ctrl_type * ctrl = this->ctrl_at(slot_index);
-
-        size_type new_slot_index = this->slot_size_;
-        slot_type * new_slot = this->slot_at(new_slot_index);
-
-        std::uint8_t ctrl_hash = 0;
-
-        assert(ctrl->is_empty());
-        this->set_used_ctrl(ctrl, ctrl_hash);
-        return { new_slot, kIsNotExists };
     }
 
     template <typename KeyT>
@@ -2041,7 +1837,7 @@ private:
             }
             skip_groups++;
             if (skip_groups > kSkipGroupsLimit) {
-                std::cout << "direct_find_failed(): key = " << key <<
+                std::cout << "find_failed(): key = " << key <<
                              ", skip_groups = " << skip_groups << std::endl;
             }
             if (skip_groups >= this->group_capacity()) {
@@ -2050,42 +1846,63 @@ private:
         }
     }
 
+    template <typename KeyT>
+    JSTD_FORCED_INLINE
+    std::pair<slot_type *, bool>
+    find_or_insert(const KeyT & key) {
+        size_type slot_index = this->find_index(key);
+        if (slot_index != this->slot_capacity()) {
+            const slot_type * slot = this->slot_at(slot_index);
+            return { slot, kIsExists };
+        }
+
+        if (this->need_grow()) {
+            // The size of slot reach the slot threshold or hashmap is full.
+            this->grow_if_necessary();
+        }
+
+        slot_index = this->find_failed(key);
+        slot_type * slot = this->slot_at(slot_index);
+        ctrl_type * ctrl = this->ctrl_at(slot_index);
+
+        std::uint8_t ctrl_hash = 0;
+
+        assert(ctrl->is_empty());
+        this->set_used_ctrl(ctrl, ctrl_hash);
+        return { slot, kIsNotExists };
+    }
+
+
     template <bool AlwaysUpdate>
     std::pair<iterator, bool> emplace_impl(const init_type & value) {
         auto find_info = this->find_or_insert(value.first);
         slot_type * slot = find_info.first;
-        FindResult result = find_info.second;
-        if (result == kIsNotExists) {
+        bool is_exists = find_info.second;
+        if (!is_exists) {
             // The key to be inserted is not exists.
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot, value);
             this->slot_size_++;
-            return { this->iterator_at(slot), true };
-        } else if (result == kIsExists) {
+        } else {
             // The key to be inserted already exists.
             if (AlwaysUpdate) {
                 slot->value.second = value.second;
             }
-            return { this->iterator_at(slot), false };
-        } else {
-            assert(result == kNeedGrow);
-            this->grow_if_necessary();
-            return this->emplace_impl<AlwaysUpdate>(value);
         }
+        return { this->iterator_at(slot), is_exists };
     }
 
     template <bool AlwaysUpdate>
     std::pair<iterator, bool> emplace_impl(init_type && value) {
         auto find_info = this->find_or_insert(value.first);
         slot_type * slot = find_info.first;
-        FindResult result = find_info.second;
-        if (result == kIsNotExists) {
+        bool is_exists = find_info.second;
+        if (!is_exists) {
             // The key to be inserted is not exists.
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot, std::forward<init_type>(value));
             this->slot_size_++;
-            return { this->iterator_at(slot), true };
-        } else if (result == kIsExists) {
+        } else {
             // The key to be inserted already exists.
             if (AlwaysUpdate) {
                 static constexpr bool is_rvalue_ref = std::is_rvalue_reference<decltype(value)>::value;
@@ -2094,28 +1911,23 @@ private:
                 else
                     slot->value.second = value.second;
             }
-            return { this->iterator_at(slot), false };
-        } else {
-            assert(result == kNeedGrow);
-            this->grow_if_necessary();
-            return this->emplace_impl<AlwaysUpdate>(std::forward<init_type>(value));
         }
+        return { this->iterator_at(slot), is_exists };
     }
 
     template <bool AlwaysUpdate, typename KeyT, typename MappedT>
     std::pair<iterator, bool> emplace_impl(KeyT && key, MappedT && value) {
         auto find_info = this->find_or_insert(key);
         slot_type * slot = find_info.first;
-        FindResult result = find_info.second;
-        if (result == kIsNotExists) {
+        bool is_exists = find_info.second;
+        if (!is_exists) {
             // The key to be inserted is not exists.
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot,
                                         std::forward<KeyT>(key),
                                         std::forward<MappedT>(value));
             this->slot_size_++;
-            return { this->iterator_at(slot), true };
-        } else if (result == kIsExists) {
+        } else {
             // The key to be inserted already exists.
             static constexpr bool isMappedType = jstd::is_same_ex<MappedT, mapped_type>::value;
             if (AlwaysUpdate) {
@@ -2126,22 +1938,16 @@ private:
                     slot->value.second = std::move(mapped_value);
                 }
             }
-            return { this->iterator_at(slot), false };
-        } else {
-            assert(result == kNeedGrow);
-            this->grow_if_necessary();
-            return this->emplace_impl<AlwaysUpdate, KeyT, MappedT>(
-                    std::forward<KeyT>(key), std::forward<MappedT>(value)
-                );
         }
+        return { this->iterator_at(slot), is_exists };
     }
 
     template <bool AlwaysUpdate, typename KeyT, typename ... Args>
     std::pair<iterator, bool> emplace_impl(KeyT && key, Args && ... args) {
         auto find_info = this->find_or_insert(key);
         slot_type * slot = find_info.first;
-        FindResult result = find_info.second;
-        if (result == kIsNotExists) {
+        bool is_exists = find_info.second;
+        if (!is_exists) {
             // The key to be inserted is not exists.
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot,
@@ -2149,21 +1955,14 @@ private:
                                         std::forward_as_tuple(std::forward<KeyT>(key)),
                                         std::forward_as_tuple(std::forward<Args>(args)...));
             this->slot_size_++;
-            return { this->iterator_at(slot), true };
-        } else if (result == kIsExists) {
+        } else {
             // The key to be inserted already exists.
             if (AlwaysUpdate) {
                 mapped_type mapped_value(std::forward<Args>(args)...);
                 slot->value.second = std::move(mapped_value);
             }
-            return { this->iterator_at(slot), false };
-        } else {
-            assert (result == kNeedGrow);
-            this->grow_if_necessary();
-            return this->emplace(std::piecewise_construct,
-                                 std::forward_as_tuple(std::forward<KeyT>(key)),
-                                 std::forward_as_tuple(std::forward<Args>(args)...));
         }
+        return { this->iterator_at(slot), is_exists };
     }
 
     template <bool AlwaysUpdate, typename PieceWise,
@@ -2174,8 +1973,8 @@ private:
         tuple_wrapper2<key_type> key_wrapper(first);
         auto find_info = this->find_or_insert(key_wrapper.value());
         slot_type * slot = find_info.first;
-        FindResult result = find_info.second;
-        if (result == kIsNotExists) {
+        bool is_exists = find_info.second;
+        if (!is_exists) {
             // The key to be inserted is not exists.
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot,
@@ -2183,24 +1982,16 @@ private:
                                         std::forward<std::tuple<Ts1...>>(first),
                                         std::forward<std::tuple<Ts2...>>(second));
             this->slot_size_++;
-            return { this->iterator_at(slot), true };
-        } else if (result == kIsExists) {
+        } else {
             // The key to be inserted already exists.
             if (AlwaysUpdate) {
                 tuple_wrapper2<mapped_type> mapped_wrapper(std::move(second));
                 slot->value.second = std::move(mapped_wrapper.value());
             }
-            return { this->iterator_at(slot), false };
-        } else {
-            assert (result == kNeedGrow);
-            this->grow_if_necessary();
-            return this->emplace(std::piecewise_construct,
-                                 std::forward<std::tuple<Ts1...>>(first),
-                                 std::forward<std::tuple<Ts2...>>(second));
         }
+        return { this->iterator_at(slot), is_exists };
     }
 
-#if 1
     template <bool AlwaysUpdate, typename First, typename std::enable_if<
               (!jstd::is_same_ex<First, value_type>::value &&
                !std::is_constructible<value_type, First &&>::value) &&
@@ -2220,31 +2011,22 @@ private:
 
         auto find_info = this->find_or_insert(tmp_slot->value.first);
         slot_type * slot = find_info.first;
-        FindResult result = find_info.second;
-        if (result == kIsNotExists) {
+        bool is_exists = find_info.second;
+        if (!is_exists) {
             // The key to be inserted is not exists.
             assert(slot != nullptr);
 
             SlotPolicyTraits::transfer(&this->allocator_, slot, tmp_slot);
             this->slot_size_++;
-            return { this->iterator_at(slot), true };
-        } else if (result == kIsExists) {
+        } else {
             // The key to be inserted already exists.
             if (AlwaysUpdate) {
                 slot->value.second = std::move(tmp_slot->value.second);
             }
             SlotPolicyTraits::destroy(&this->allocator_, tmp_slot);
-            return { this->iterator_at(slot), false };
-        } else {
-            assert (result == kNeedGrow);
-            this->grow_if_necessary();
-            if (kIsLayoutCompatible)
-                return this->emplace(std::move(tmp_slot->mutable_value));
-            else
-                return this->emplace(std::move(tmp_slot->value));
         }
+        return { this->iterator_at(slot), is_exists };
     }
-#endif
 
     ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2252,8 +2034,8 @@ private:
     std::pair<iterator, bool> try_emplace_impl(const KeyT & key, Args && ... args) {
         auto find_info = this->find_or_insert(key);
         slot_type * slot = find_info.first;
-        FindResult result = find_info.second;
-        if (result == kIsNotExists) {
+        bool is_exists = find_info.second;
+        if (!is_exists) {
             // The key to be inserted is not exists.
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot,
@@ -2261,19 +2043,16 @@ private:
                                         std::forward_as_tuple(key),
                                         std::forward_as_tuple(std::forward<Args>(args)...));
             this->slot_size_++;
-        } else if (result == kNeedGrow) {
-            this->grow_if_necessary();
-            return this->try_emplace_impl(key, std::forward<Args>(args)...);
         }
-        return { this->iterator_at(slot), (result == kIsNotExists) };
+        return { this->iterator_at(slot), is_exists };
     }
 
     template <typename KeyT, typename ... Args>
     std::pair<iterator, bool> try_emplace_impl(KeyT && key, Args && ... args) {
         auto find_info = this->find_or_insert(key);
         slot_type * slot = find_info.first;
-        FindResult result = find_info.second;
-        if (result == kIsNotExists) {
+        bool is_exists = find_info.second;
+        if (!is_exists) {
             // The key to be inserted is not exists.
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot,
@@ -2281,12 +2060,8 @@ private:
                                         std::forward_as_tuple(std::forward<KeyT>(key)),
                                         std::forward_as_tuple(std::forward<Args>(args)...));
             this->slot_size_++;
-        } else if (result == kNeedGrow) {
-            this->grow_if_necessary();
-            return this->try_emplace_impl(std::forward<KeyT>(key),
-                                          std::forward<Args>(args)...);
         }
-        return { this->iterator_at(slot), (result == kIsNotExists) };
+        return { this->iterator_at(slot), is_exists };
     }
 };
 
