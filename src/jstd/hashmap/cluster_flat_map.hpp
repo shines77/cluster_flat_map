@@ -242,6 +242,8 @@ public:
     size_type slot_capacity() const { return table_.slot_capacity(); }
     size_type slot_threshold() const { return table_.slot_threshold(); }
 
+    size_type group_capacity() const { return table_.group_capacity(); }
+
     bool is_valid() const { return table_.is_valid(); }
     bool is_empty() const { return table_.is_empty(); }
 
@@ -271,19 +273,15 @@ public:
     ///
     /// Hash policy
     ///
-    void reserve(size_type new_capacity, bool read_only = false) {
-        table_.reserve(new_capacity, read_only);
+    void reserve(size_type new_capacity) {
+        table_.reserve(new_capacity);
     }
 
-    void resize(size_type new_capacity, bool read_only = false) {
-        table_.resize(new_capacity, read_only);
+    void rehash(size_type new_capacity) {
+        table_.resize(new_capacity);
     }
 
-    void rehash(size_type new_capacity, bool read_only = false) {
-        table_.resize(new_capacity, read_only);
-    }
-
-    void shrink_to_fit(bool read_only = false) {
+    void shrink_to_fit(bool read_only = true) {
         table_.shrink_to_fit(read_only);
     }
 
@@ -322,7 +320,7 @@ public:
     ///
     /// Modifiers
     ///
-    void clear(bool need_destroy = false) noexcept {
+    void clear(bool need_destroy = true) noexcept {
         table_.clear(need_destroy);
     }
 
