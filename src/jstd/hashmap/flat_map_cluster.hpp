@@ -132,11 +132,11 @@ public:
         this->value = kEmptySlot;
     }
 
-    inline void set_hash(hash_type hash) {
+    inline void set_used(hash_type hash) {
         this->value = hash;
     }
 
-    inline void set_hash64(std::size_t hash) {
+    inline void set_used64(std::size_t hash) {
         this->value = hash_bits(hash);
     }
 
@@ -235,16 +235,16 @@ public:
         ctrl->set_empty();
     }
 
-    inline void set_hash(std::size_t pos, hash_type hash) {
+    inline void set_used(std::size_t pos, hash_type hash) {
         assert(pos < kGroupSize);
         ctrl_type * ctrl = &ctrls[pos];
-        ctrl->set_hash(hash);
+        ctrl->set_used(hash);
     }
 
-    inline void set_hash64(std::size_t pos, std::size_t hash) {
+    inline void set_used64(std::size_t pos, std::size_t hash) {
         assert(pos < kGroupSize);
         ctrl_type * ctrl = &ctrls[pos];
-        ctrl->set_hash64(hash);
+        ctrl->set_used64(hash);
     }
 
     inline void set_overflow(std::size_t pos) {

@@ -1197,9 +1197,10 @@ private:
         slot_type * new_slots = this->AlignedSlots<kSlotAlignment>(new_ctrls, new_ctrl_capacity);
 #endif
         this->ctrls_ = new_ctrls;
+        this->groups_ = reinterpret_cast<group_type *>(new_ctrls);
 
         this->slots_ = new_slots;
-        if (Initialize) {
+        if (isInitialize) {
             assert(this->slot_size_ == 0);
         } else {
             this->slot_size_ = 0;
@@ -1298,7 +1299,8 @@ private:
 
     JSTD_FORCED_INLINE
     void destroy_slot_data(ctrl_type * ctrl, slot_type * slot) {
-        this->set_empty(ctrl);
+        assert(ctrl->is_used());
+        ctrl->set_empty();
         this->destroy_slot(slot);
     }
 
@@ -1681,34 +1683,6 @@ private:
         }
     }
 
-    inline void set_used_ctrl(size_type index, std::uint8_t hash) {
-        ctrl_type * ctrl = this->ctrl_at(index);
-        this->set_used_ctrl(ctrl, hash);
-    }
-
-    inline void set_used_ctrl(ctrl_type * ctrl, std::uint8_t hash) {
-        ctrl->set_hash(hash);
-    }
-
-    inline void set_used_ctrl(size_type index, const ctrl_type & new_ctrl) {
-        ctrl_type * ctrl = this->ctrl_at(index);
-        this->set_used_ctrl(ctrl, new_ctrl);
-    }
-
-    inline void set_used_ctrl(ctrl_type * ctrl, const ctrl_type & new_ctrl) {
-        ctrl->set_value(new_ctrl.get_value());
-    }
-
-    inline void set_empty_ctrl(size_type index) {
-        ctrl_type * ctrl = this->ctrl_at(index);
-        this->set_empty_ctrl(ctrl);
-    }
-
-    inline void set_empty_ctrl(ctrl_type * ctrl) {
-        assert(ctrl->is_used());
-        ctrl->set_empty();
-    }
-
     template <typename KeyT>
     slot_type * find_impl(const KeyT & key) {
         return const_cast<slot_type *>(
@@ -1884,7 +1858,7 @@ private:
         std::uint8_t ctrl_hash = 0;
 
         assert(ctrl->is_empty());
-        this->set_used_ctrl(ctrl, ctrl_hash);
+        ctrl->set_used(ctrl_hash);
         return { slot, kIsNotExists };
     }
 
