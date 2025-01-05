@@ -1685,7 +1685,7 @@ private:
                     size_type slot_index = slot_base_index + used_pos;
                     return slot_index;
                 }
-                slot_base += kGroupWidth;
+                slot_base_index += kGroupWidth;
             }
         }
         return this->slot_capacity();
@@ -1709,17 +1709,17 @@ private:
                     size_type slot_index = slot_base_index + used_pos;
                     return slot_index;
                 }
-                slot_base += kGroupWidth;
+                slot_base_index += kGroupWidth;
                 group++;
             }
             for (; group < last_group; ++group) {
                 std::uint32_t used_mask = group->match_used();
                 if (likely(used_mask != 0)) {
                     std::uint32_t used_pos = BitUtils::bsf32(used_mask);
-                    size_type slot_index = slot_base + used_pos;
+                    size_type slot_index = slot_base_index + used_pos;
                     return slot_index;
                 }
-                slot_base += kGroupWidth;
+                slot_base_index += kGroupWidth;
             }
         }
         return this->slot_capacity();
@@ -1801,8 +1801,8 @@ private:
     template <typename KeyT>
     JSTD_NO_INLINE
     size_type find_index(const KeyT & key, size_type slot_pos, std::uint8_t ctrl_hash) const {
-        size_type group_index = slot_index / kGroupWidth;
-        size_type group_pos = slot_index % kGroupWidth;
+        size_type group_index = slot_pos / kGroupWidth;
+        size_type group_pos = slot_pos % kGroupWidth;
         const group_type * group = this->group_at(group_index);
         const group_type * first_group = group;
         const group_type * last_group = this->last_group();
@@ -1852,8 +1852,8 @@ private:
     template <typename KeyT>
     JSTD_FORCED_INLINE
     size_type find_first_empty_to_insert(const KeyT & key, size_type slot_pos, std::uint8_t ctrl_hash) {
-        size_type group_index = slot_index / kGroupWidth;
-        size_type group_pos = slot_index % kGroupWidth;
+        size_type group_index = slot_pos / kGroupWidth;
+        size_type group_pos = slot_pos % kGroupWidth;
         group_type * group = this->group_at(group_index);
         group_type * first_group = group;
         group_type * last_group = this->last_group();
