@@ -194,55 +194,55 @@ public:
     }
 
     inline bool is_empty(std::size_t pos) const {
-        assert(pos < kGroupSize);
+        assert(pos < kGroupWidth);
         ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_empty();
     }
 
     inline bool is_used(std::size_t pos) const {
-        assert(pos < kGroupSize);
+        assert(pos < kGroupWidth);
         ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_used();
     }
 
     inline bool is_overflow(std::size_t pos) const {
-        assert(pos < kGroupSize);
+        assert(pos < kGroupWidth);
         ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_overflow();
     }
 
     inline bool is_overflow_strict(std::size_t pos) const {
-        assert(pos < kGroupSize);
+        assert(pos < kGroupWidth);
         ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_overflow_strict();
     }
 
     bool is_equals(std::size_t pos, hash_type hash) {
-        assert(pos < kGroupSize);
+        assert(pos < kGroupWidth);
         ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_equals(hash);
     }
 
     bool is_equals64(std::size_t pos, std::size_t hash) {
-        assert(pos < kGroupSize);
+        assert(pos < kGroupWidth);
         ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_equals64(hash);
     }
 
     inline void set_empty(std::size_t pos) {
-        assert(pos < kGroupSize);
+        assert(pos < kGroupWidth);
         ctrl_type * ctrl = &ctrls[pos];
         ctrl->set_empty();
     }
 
     inline void set_used(std::size_t pos, hash_type hash) {
-        assert(pos < kGroupSize);
+        assert(pos < kGroupWidth);
         ctrl_type * ctrl = &ctrls[pos];
         ctrl->set_used(hash);
     }
 
     inline void set_used64(std::size_t pos, std::size_t hash) {
-        assert(pos < kGroupSize);
+        assert(pos < kGroupWidth);
         ctrl_type * ctrl = &ctrls[pos];
         ctrl->set_used64(hash);
     }

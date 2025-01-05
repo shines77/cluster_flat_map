@@ -198,6 +198,23 @@ public:
 
     ~cluster_flat_map() = default;
 
+    cluster_flat_map & operator = (cluster_flat_map const & other) {
+        table_ = other.table_;
+        return *this;
+    }
+
+    cluster_flat_map & operator = (cluster_flat_map && other) noexcept(
+        noexcept(std::declval<table_type &>() = std::declval<table_type &&>())) {
+        table_ = std::move(other.table_);
+        return *this;
+    }
+
+    cluster_flat_map & operator = (std::initializer_list<value_type> il) {
+        this->clear();
+        this->insert(il.begin(), il.end());
+        return *this;
+    }
+
     ///
     /// Observers
     ///

@@ -86,6 +86,8 @@
 
 #define CLUSTER_USE_GROUP_SCAN      1
 
+#define CLUSTER_DISPLAY_DEBUG_INFO  1
+
 namespace jstd {
 
 template <typename TypePolicy, typename Hash,
@@ -878,19 +880,19 @@ private:
     }
 
     inline size_type index_for_hash(std::size_t hash_code) const noexcept {
-        std::size_t hash_value = hash_code;
 #if CLUSTER_USE_HASH_POLICY
         if (kUseIndexSalt) {
-            hash_value ^= this->index_salt();
+            hash_code ^= this->index_salt();
         }
-        size_type index = this->hash_policy_.template index_for_hash<key_type>(hash_value, this->slot_mask());
+        size_type index = this->hash_policy_.template index_for_hash<key_type>(hash_code, this->slot_mask());
         return index;
 #else
-        hash_value = this->index_hasher(hash_value);
+        hash_code = this->index_hasher(hash_code);
         if (kUseIndexSalt) {
-            hash_value ^= this->index_salt();
+            hash_code ^= this->index_salt();
         }
-        return (hash_value & this->slot_mask());
+        size_type index = hash_code & this->slot_mask();
+        return index;
 #endif
     }
 
@@ -1678,7 +1680,7 @@ private:
             size_type slot_base_index = 0;
             for (; group < last_group; ++group) {
                 std::uint32_t used_mask = group->match_used();
-                if (used_mask != 0) {
+                if (likely(used_mask != 0)) {
                     std::uint32_t used_pos = BitUtils::bsf32(used_mask);
                     size_type slot_index = slot_base_index + used_pos;
                     return slot_index;
@@ -1702,7 +1704,7 @@ private:
             if (group < last_group) {
                 std::uint32_t used_mask = group->match_used();
                 used_mask &= excluded_mask;
-                if (used_mask != 0) {
+                if (likely(used_mask != 0)) {
                     std::uint32_t used_pos = BitUtils::bsf32(used_mask);
                     size_type slot_index = slot_base_index + used_pos;
                     return slot_index;
@@ -1712,7 +1714,7 @@ private:
             }
             for (; group < last_group; ++group) {
                 std::uint32_t used_mask = group->match_used();
-                if (used_mask != 0) {
+                if (likely(used_mask != 0)) {
                     std::uint32_t used_pos = BitUtils::bsf32(used_mask);
                     size_type slot_index = slot_base + used_pos;
                     return slot_index;
@@ -1752,28 +1754,31 @@ private:
 
                     size_type slot_pos = slot_base + match_pos;
                     const slot_type * slot = this->slot_at(slot_pos);
-                    if (this->key_equal_(slot->value.first, key)) {
+                    if (likely(this->key_equal_()(key, slot->value.first))) {
                         return slot;
                     }
                 } while (match_mask != 0);
-            } else {
-                // If it doesn't overflow, means it hasn't been found.
-                if (!group->is_overflow(group_pos)) {
-                    return this->last_slot();
-                }
             }
+
+            // If it's not overflow, means it hasn't been found.
+            if (likely(!group->is_overflow(group_pos))) {
+                return this->last_slot();
+            }
+
             slot_base += kGroupWidth;
             group++;
-            if (group >= last_group) {
+            if (unlikely(group >= last_group)) {
                 group = this->groups();
                 slot_base = 0;
             }
             skip_groups++;
-            if (skip_groups > kSkipGroupsLimit) {
+#if CLUSTER_DISPLAY_DEBUG_INFO
+            if (unlikely(skip_groups > kSkipGroupsLimit)) {
                 std::cout << "find_impl(): key = " << key <<
                              ", skip_groups = " << skip_groups << std::endl;
             }
-            if (skip_groups >= this->group_capacity()) {
+#endif
+            if (unlikely(skip_groups >= this->group_capacity())) {
                 return this->last_slot();
             }
         }
@@ -1787,8 +1792,14 @@ private:
     template <typename KeyT>
     size_type find_index(const KeyT & key) const {
         std::size_t hash_code = this->get_hash(key);
-        size_type slot_index = this->index_for_hash(hash_code);
+        size_type slot_pos = this->index_for_hash(hash_code);
         std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
+        return this->find_index(key, slot_pos, ctrl_hash);
+    }
+
+    template <typename KeyT>
+    JSTD_NO_INLINE
+    size_type find_index(const KeyT & key, size_type slot_pos, std::uint8_t ctrl_hash) const {
         size_type group_index = slot_index / kGroupWidth;
         size_type group_pos = slot_index % kGroupWidth;
         const group_type * group = this->group_at(group_index);
@@ -1804,30 +1815,33 @@ private:
                     std::uint32_t match_pos = BitUtils::bsf32(match_mask);
                     match_mask = BitUtils::clearLowBit32(match_mask);
 
-                    size_type slot_pos = slot_base + match_pos;
-                    const slot_type * slot = this->slot_at(slot_pos);
-                    if (this->key_equal_(slot->value.first, key)) {
-                        return slot_pos;
+                    size_type slot_index = slot_base + match_pos;
+                    const slot_type * slot = this->slot_at(slot_index);
+                    if (likely(this->key_equal_()(key, slot->value.first))) {
+                        return slot_index;
                     }
                 } while (match_mask != 0);
-            } else {
-                // If it doesn't overflow, means it hasn't been found.
-                if (!group->is_overflow(group_pos)) {
-                    return this->slot_capacity();
-                }
             }
+
+            // If it's not overflow, means it hasn't been found.
+            if (likely(!group->is_overflow(group_pos))) {
+                return this->slot_capacity();
+            }
+
             slot_base += kGroupWidth;
             group++;
-            if (group >= last_group) {
+            if (unlikely(group >= last_group)) {
                 group = this->groups();
                 slot_base = 0;
             }
             skip_groups++;
-            if (skip_groups > kSkipGroupsLimit) {
+#if CLUSTER_DISPLAY_DEBUG_INFO
+            if (unlikely(skip_groups > kSkipGroupsLimit)) {
                 std::cout << "find_index(): key = " << key <<
                              ", skip_groups = " << skip_groups << std::endl;
             }
-            if (skip_groups >= this->group_capacity()) {
+#endif
+            if (unlikely(skip_groups >= this->group_capacity())) {
                 return this->slot_capacity();
             }
         }
@@ -1835,10 +1849,7 @@ private:
 
     template <typename KeyT>
     JSTD_FORCED_INLINE
-    size_type find_first_empty_to_insert(const KeyT & key) {
-        std::size_t hash_code = this->get_hash(key);
-        size_type slot_index = this->index_for_hash(hash_code);
-        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
+    size_type find_first_empty_to_insert(const KeyT & key, size_type slot_pos, std::uint8_t ctrl_hash) {
         size_type group_index = slot_index / kGroupWidth;
         size_type group_pos = slot_index % kGroupWidth;
         group_type * group = this->group_at(group_index);
@@ -1851,26 +1862,28 @@ private:
             std::uint32_t empty_mask = group->match_empty();
             if (empty_mask != 0) {
                 std::uint32_t empty_pos = BitUtils::bsf32(empty_mask);
-                size_type slot_pos = slot_base + empty_pos;
-                return slot_pos;
+                size_type slot_index = slot_base + empty_pos;
+                return slot_index;
             } else {
-                // If it doesn't overflow, set the overflow bit.
-                if (!group->is_overflow(group_pos)) {
+                // If it's not overflow, set the overflow bit.
+                if (likely(!group->is_overflow(group_pos))) {
                     group->set_overflow(group_pos);
                 }
             }
             slot_base += kGroupWidth;
             group++;
-            if (group >= last_group) {
+            if (unlikely(group >= last_group)) {
                 group = this->groups();
                 slot_base = 0;
             }
             skip_groups++;
-            if (skip_groups > kSkipGroupsLimit) {
+#if CLUSTER_DISPLAY_DEBUG_INFO
+            if (unlikely(skip_groups > kSkipGroupsLimit)) {
                 std::cout << "find_first_empty_to_insert(): key = " << key <<
                              ", skip_groups = " << skip_groups << std::endl;
             }
-            if (skip_groups >= this->group_capacity()) {
+#endif
+            if (unlikely(skip_groups >= this->group_capacity())) {
                 return this->slot_capacity();
             }
         }
@@ -1880,7 +1893,11 @@ private:
     JSTD_NO_INLINE
     std::pair<slot_type *, bool>
     find_and_insert(const KeyT & key) {
-        size_type slot_index = this->find_index(key);
+        std::size_t hash_code = this->get_hash(key);
+        size_type slot_pos = this->index_for_hash(hash_code);
+        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
+
+        size_type slot_index = this->find_index(key, slot_pos, ctrl_hash);
         if (slot_index != this->slot_capacity()) {
             const slot_type * slot = this->slot_at(slot_index);
             return { slot, kIsExists };
@@ -1889,19 +1906,20 @@ private:
         if (this->need_grow()) {
             // The size of slot reach the slot threshold or hashmap is full.
             this->grow_if_necessary();
+
+            slot_pos = this->index_for_hash(hash_code);
+            // Ctrl hash will not change
+            // ctrl_hash = this->get_ctrl_hash(hash_code);
         }
 
-        slot_index = this->find_first_empty_to_insert(key);
+        slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
         slot_type * slot = this->slot_at(slot_index);
         ctrl_type * ctrl = this->ctrl_at(slot_index);
-
-        std::uint8_t ctrl_hash = 0;
 
         assert(ctrl->is_empty());
         ctrl->set_used(ctrl_hash);
         return { slot, kIsNotExists };
     }
-
 
     template <bool AlwaysUpdate>
     std::pair<iterator, bool> emplace_impl(const init_type & value) {

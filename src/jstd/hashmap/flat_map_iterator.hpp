@@ -182,7 +182,7 @@ public:
     flat_map_iterator & operator -- () {
         ssize_type index = this->index_;
         const ctrl_type * ctrl = this->owner_->ctrl_at(index);
-        
+
         do {
             --index;
             --ctrl;
