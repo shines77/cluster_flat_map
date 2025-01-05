@@ -1145,7 +1145,7 @@ private:
 
     template <bool isInitialize = false>
     void create_slots(size_type init_capacity) {
-        if (init_capacity == 0) {
+        if (unlikely(init_capacity == 0)) {
             this->reset<false>();
             return;
         }
@@ -1865,6 +1865,8 @@ private:
             std::uint32_t empty_mask = group->match_empty();
             if (empty_mask != 0) {
                 std::uint32_t empty_pos = BitUtils::bsf32(empty_mask);
+                assert(group->is_empty(empty_pos));
+                group->set_used(empty_pos, ctrl_hash);
                 size_type slot_index = slot_base + empty_pos;
                 return slot_index;
             } else {
@@ -1902,7 +1904,7 @@ private:
 
         size_type slot_index = this->find_index(key, slot_pos, ctrl_hash);
         if (slot_index != this->slot_capacity()) {
-            const slot_type * slot = this->slot_at(slot_index);
+            slot_type * slot = this->slot_at(slot_index);
             return { slot, kIsExists };
         }
 
@@ -1917,10 +1919,6 @@ private:
 
         slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
         slot_type * slot = this->slot_at(slot_index);
-        ctrl_type * ctrl = this->ctrl_at(slot_index);
-
-        assert(ctrl->is_empty());
-        ctrl->set_used(ctrl_hash);
         return { slot, kIsNotExists };
     }
 
@@ -1947,10 +1945,6 @@ private:
 
         size_type slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
         slot_type * slot = this->slot_at(slot_index);
-        ctrl_type * ctrl = this->ctrl_at(slot_index);
-
-        assert(ctrl->is_empty());
-        ctrl->set_used(ctrl_hash);
         return slot;
     }
 
