@@ -1740,6 +1740,7 @@ private:
         size_type group_index = slot_index / kGroupWidth;
         size_type group_pos = slot_index % kGroupWidth;
         const group_type * group = this->group_at(group_index);
+        const group_type * first_group = group;
         const group_type * last_group = this->last_group();
         
         size_type slot_base = group_index * kGroupWidth;
@@ -1771,16 +1772,16 @@ private:
                 group = this->groups();
                 slot_base = 0;
             }
-            skip_groups++;
+            if (unlikely(group == first_group)) {
+                return this->last_slot();
+            }
 #if CLUSTER_DISPLAY_DEBUG_INFO
+            skip_groups++;
             if (unlikely(skip_groups > kSkipGroupsLimit)) {
                 std::cout << "find_impl(): key = " << key <<
                              ", skip_groups = " << skip_groups << std::endl;
             }
 #endif
-            if (unlikely(skip_groups >= this->group_capacity())) {
-                return this->last_slot();
-            }
         }
     }
 
@@ -1803,6 +1804,7 @@ private:
         size_type group_index = slot_index / kGroupWidth;
         size_type group_pos = slot_index % kGroupWidth;
         const group_type * group = this->group_at(group_index);
+        const group_type * first_group = group;
         const group_type * last_group = this->last_group();
         
         size_type slot_base = group_index * kGroupWidth;
@@ -1834,16 +1836,16 @@ private:
                 group = this->groups();
                 slot_base = 0;
             }
-            skip_groups++;
+            if (unlikely(group == first_group)) {
+                return this->last_slot();
+            }
 #if CLUSTER_DISPLAY_DEBUG_INFO
+            skip_groups++;
             if (unlikely(skip_groups > kSkipGroupsLimit)) {
                 std::cout << "find_index(): key = " << key <<
                              ", skip_groups = " << skip_groups << std::endl;
             }
 #endif
-            if (unlikely(skip_groups >= this->group_capacity())) {
-                return this->slot_capacity();
-            }
         }
     }
 
@@ -1853,6 +1855,7 @@ private:
         size_type group_index = slot_index / kGroupWidth;
         size_type group_pos = slot_index % kGroupWidth;
         group_type * group = this->group_at(group_index);
+        group_type * first_group = group;
         group_type * last_group = this->last_group();
         
         size_type skip_groups = 0;
@@ -1876,16 +1879,16 @@ private:
                 group = this->groups();
                 slot_base = 0;
             }
-            skip_groups++;
+            if (unlikely(group == first_group)) {
+                return this->last_slot();
+            }
 #if CLUSTER_DISPLAY_DEBUG_INFO
+            skip_groups++;
             if (unlikely(skip_groups > kSkipGroupsLimit)) {
                 std::cout << "find_first_empty_to_insert(): key = " << key <<
                              ", skip_groups = " << skip_groups << std::endl;
             }
 #endif
-            if (unlikely(skip_groups >= this->group_capacity())) {
-                return this->slot_capacity();
-            }
         }
     }
 
