@@ -58,12 +58,14 @@
 
 #include <assert.h>
 
+#define ITERATOR_USE_GROUP_SCAN     1
+
 namespace jstd {
 
 template <typename HashMap, typename T, bool IsIndirectKV /* = false */>
 class flat_map_iterator {
 public:
-    using iterator_category = std::bidirectional_iterator_tag;
+    using iterator_category = std::forward_iterator_tag;
 
     using value_type = T;
     using pointer = T *;
@@ -150,6 +152,11 @@ public:
     }
 
     flat_map_iterator & operator ++ () {
+#if ITERATOR_USE_GROUP_SCAN
+        ssize_type next_used_index = this->owner_->skip_empty_slots(this->index_);
+        this->index_ = next_used_index;
+        return *this;
+#else
         ssize_type index = this->index_;
         const ctrl_type * ctrl = this->owner_->ctrl_at(index);
         ssize_type max_index = reinterpret_cast<size_type>(this->owner_->slot_capacity());
@@ -163,6 +170,7 @@ public:
 
         this->index_ = index;
         return *this;
+#endif // ITERATOR_USE_GROUP_SCAN
     }
 
     flat_map_iterator operator ++ (int) {
@@ -252,7 +260,7 @@ public:
 template <typename HashMap, typename T>
 class flat_map_iterator<HashMap, T, true> {
 public:
-    using iterator_category = std::bidirectional_iterator_tag;
+    using iterator_category = std::forward_iterator_tag;
 
     using value_type = T;
     using pointer = T *;

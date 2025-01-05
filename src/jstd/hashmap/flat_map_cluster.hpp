@@ -169,7 +169,7 @@ public:
     static constexpr std::uint8_t kEmptySlot    = ctrl_type::kEmptySlot;
     static constexpr std::uint8_t kOverflowMask = ctrl_type::kOverflowMask;
 
-    static constexpr std::size_t kGroupSize = 16;
+    static constexpr std::size_t kGroupWidth = 16;
 
     flat_map_cluster16() {}
     ~flat_map_cluster16() {}
@@ -313,7 +313,7 @@ public:
     }
 
 private:
-    alignas(16) ctrl_type ctrls[kGroupSize];
+    alignas(16) ctrl_type ctrls[kGroupWidth];
 };
 
 } // namespace jstd

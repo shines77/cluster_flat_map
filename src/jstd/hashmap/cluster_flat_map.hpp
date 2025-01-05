@@ -270,6 +270,8 @@ public:
     double load_factor() const { return table_.load_factor(); }
     double max_load_factor() const { return table_.max_load_factor(); }
 
+    void max_load_factor(double mlf) const { table_.max_load_factor(mlf); }
+
     ///
     /// Hash policy
     ///

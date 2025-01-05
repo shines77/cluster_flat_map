@@ -130,7 +130,7 @@ public:
     static constexpr std::uint8_t kEmptySlot    = ctrl_type::kEmptySlot;
     static constexpr std::uint8_t kOverflowMask = ctrl_type::kOverflowMask;
 
-    static constexpr size_type kGroupSize = group_type::kGroupSize;
+    static constexpr size_type kGroupWidth = group_type::kGroupWidth;
 
     static constexpr bool kIsPlainKey    = detail::is_plain_type<key_type>::value;
     static constexpr bool kIsPlainMapped = detail::is_plain_type<mapped_type>::value;
@@ -221,10 +221,11 @@ public:
 private:
     group_type *    groups_;
     ctrl_type *     ctrls_;
-    size_type       slot_size_;
-    size_type       slot_mask_;     // capacity = slot_mask + 1
-    size_type       slot_threshold_;
     slot_type *     slots_;
+    size_type       slot_size_;
+    size_type       slot_mask_;     // slot_capacity = slot_mask + 1
+    size_type       slot_threshold_;
+
     size_type       mlf_;
 
 #if CLUSTER_USE_HASH_POLICY
@@ -338,22 +339,8 @@ public:
     /// Iterators
     ///
     iterator begin() noexcept {
-        if (this->size() != 0) {
-            group_type * group = this->groups();
-            group_type * last_group = this->last_group();
-            size_type slot_base = 0;
-            for (; group < last_group; ++group) {
-                std::uint32_t used_mask = group->match_used();
-                while (used_mask != 0) {
-                    std::uint32_t used_pos = BitUtils::bsf32(used_mask);
-                    used_mask = BitUtils::clearLowBit32(used_mask);
-                    size_type slot_index = slot_base + used_pos;
-                    return this->iterator_at(slot_index);
-                }
-                slot_base += kGroupSize;
-            }
-        }
-        return this->end();
+        size_type slot_index = this->find_first_used_index();
+        return this->iterator_at(slot_index);
     }
 
     iterator end() noexcept {
@@ -386,10 +373,10 @@ public:
     size_type slot_threshold() const { return this->slot_threshold_; }
 
     size_type ctrl_capacity() const { return this->slot_capacity(); }
-    size_type max_ctrl_capacity() const { return (this->group_capacity() * kGroupSize); }
+    size_type max_ctrl_capacity() const { return (this->group_capacity() * kGroupWidth); }
 
     size_type group_capacity() const {
-        return ((this->slot_capacity() + (kGroupSize - 1)) / kGroupSize);
+        return ((this->slot_capacity() + (kGroupWidth - 1)) / kGroupWidth);
     }
 
     bool is_valid() const { return (this->groups() != nullptr); }
@@ -508,12 +495,12 @@ public:
     ///
     size_type count(const key_type & key) const {
         const slot_type * slot = this->find_impl(key);
-        return (slot != nullptr) ? 1 : 0;
+        return (slot != this->last_slot()) ? 1 : 0;
     }
 
     bool contains(const key_type & key) const {
         const slot_type * slot = this->find_impl(key);
-        return (slot != nullptr);
+        return (slot != this->last_slot());
     }
 
     ///
@@ -696,14 +683,14 @@ public:
     }
 
     inline group_type group_at(size_type slot_index) noexcept {
-        assert(slot_index < this->slot_capacity());
-        size_type group_idx = slot_index / kGroupSize;
+        assert(slot_index <= this->slot_capacity());
+        size_type group_idx = slot_index / kGroupWidth;
         return (this->groups() + std::ptrdiff_t(group_idx));
     }
 
     inline const group_type group_at(size_type slot_index) const noexcept {
-        assert(slot_index < this->slot_capacity());
-        size_type group_idx = slot_index / kGroupSize;
+        assert(slot_index <= this->slot_capacity());
+        size_type group_idx = slot_index / kGroupWidth;
         return (this->groups() + std::ptrdiff_t(group_idx));
     }
 
@@ -993,7 +980,7 @@ private:
     void init_ctrls(ctrl_type * ctrls, size_type ctrl_alloc_capacity) {
         if (ctrls != this_type::default_empty_ctrls()) {
             ctrl_type * ctrl = ctrls;
-            assert((ctrl_alloc_capacity % kGroupSize) == 0);
+            assert((ctrl_alloc_capacity % kGroupWidth) == 0);
             group_type * group = reinterpret_cast<group_type *>(ctrls);
             group_type * last_group = group + ctrl_alloc_capacity;
             for (; group < last_group; ++group) {
@@ -1014,7 +1001,7 @@ private:
 
     void destroy_ctrls() noexcept {
         if (this->ctrls_ != this_type::default_empty_ctrls()) {
-            size_type max_ctrl_capacity = this->group_capacity() * kGroupSize;
+            size_type max_ctrl_capacity = this->group_capacity() * kGroupWidth;
 #if CLUSTER_USE_SEPARATE_SLOTS
             CtrlAllocTraits::deallocate(this->ctrl_allocator_, this->ctrls_, max_ctrl_capacity);
 #else
@@ -1067,7 +1054,7 @@ private:
                         slot_type * slot = slot_base + used_pos;
                         this->destroy_slot(slot);
                     }
-                    slot_base += kGroupSize;
+                    slot_base += kGroupWidth;
                 }
 #else
                 ctrl_type * ctrl = this->ctrls();
@@ -1175,9 +1162,9 @@ private:
         this->hash_policy_.commit(hash_policy_setting);
 #endif
         size_type new_ctrl_capacity = new_capacity;
-        size_type new_group_capacity = (new_ctrl_capacity + (kGroupSize - 1)) / kGroupSize;
+        size_type new_group_capacity = (new_ctrl_capacity + (kGroupWidth - 1)) / kGroupWidth;
         assert(new_group_capacity > 0);
-        size_type ctrl_alloc_size = new_group_capacity * kGroupSize;
+        size_type ctrl_alloc_size = new_group_capacity * kGroupWidth;
 
 #if CLUSTER_USE_SEPARATE_SLOTS
         ctrl_type * new_ctrls = CtrlAllocTraits::allocate(this->ctrl_allocator_, ctrl_alloc_size);
@@ -1248,14 +1235,14 @@ private:
                         this->insert_no_grow(old_slot);
                         this->destroy_slot(old_slot);
                     }
-                    slot_base += kGroupSize;
+                    slot_base += kGroupWidth;
                 }
             }
 
             assert(this->slot_size() == old_slot_size);
 
             if (old_groups != this_type::default_empty_groups()) {
-                size_type old_alloc_ctrl_capacity = old_group_capacity * kGroupSize;
+                size_type old_alloc_ctrl_capacity = old_group_capacity * kGroupWidth;
 #if CLUSTER_USE_SEPARATE_SLOTS
                 CtrlAllocTraits::deallocate(this->ctrl_allocator_, old_ctrls, old_alloc_ctrl_capacity);
 #else
@@ -1683,6 +1670,59 @@ private:
         }
     }
 
+    JSTD_FORCED_INLINE
+    size_type find_first_used_index() const {
+        if (this->size() != 0) {
+            group_type * group = this->groups();
+            group_type * last_group = this->last_group();
+            size_type slot_base_index = 0;
+            for (; group < last_group; ++group) {
+                std::uint32_t used_mask = group->match_used();
+                if (used_mask != 0) {
+                    std::uint32_t used_pos = BitUtils::bsf32(used_mask);
+                    size_type slot_index = slot_base_index + used_pos;
+                    return slot_index;
+                }
+                slot_base += kGroupWidth;
+            }
+        }
+        return this->slot_capacity();
+    }
+
+    JSTD_FORCED_INLINE
+    size_type skip_empty_slots(size_type start_slot_index) const {
+        if (this->size() != 0) {
+            group_type * group = this->group_at(start_slot_index);
+            group_type * last_group = this->last_group();
+            size_type slot_remain = start_slot_index % kGroupWidth;
+            size_type slot_base_index = start_slot_index - slot_remain;
+            // The two ways are equivalent.
+            // std::uint32_t excluded_mask = ^((std::uint32_t(1) << (std::uint32_t(slot_remain) + 1)) - 1);
+            std::uint32_t excluded_mask = -(std::uint32_t(1) << (std::uint32_t(slot_remain) + 1));
+            if (group < last_group) {
+                std::uint32_t used_mask = group->match_used();
+                used_mask &= excluded_mask;
+                if (used_mask != 0) {
+                    std::uint32_t used_pos = BitUtils::bsf32(used_mask);
+                    size_type slot_index = slot_base_index + used_pos;
+                    return slot_index;
+                }
+                slot_base += kGroupWidth;
+                group++;
+            }
+            for (; group < last_group; ++group) {
+                std::uint32_t used_mask = group->match_used();
+                if (used_mask != 0) {
+                    std::uint32_t used_pos = BitUtils::bsf32(used_mask);
+                    size_type slot_index = slot_base + used_pos;
+                    return slot_index;
+                }
+                slot_base += kGroupWidth;
+            }
+        }
+        return this->slot_capacity();
+    }
+
     template <typename KeyT>
     slot_type * find_impl(const KeyT & key) {
         return const_cast<slot_type *>(
@@ -1695,12 +1735,12 @@ private:
         std::size_t hash_code = this->get_hash(key);
         size_type slot_index = this->index_for_hash(hash_code);
         std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
-        size_type group_index = slot_index / kGroupSize;
-        size_type group_pos = slot_index % kGroupSize;
+        size_type group_index = slot_index / kGroupWidth;
+        size_type group_pos = slot_index % kGroupWidth;
         const group_type * group = this->group_at(group_index);
         const group_type * last_group = this->last_group();
         
-        size_type slot_base = group_index * kGroupSize;
+        size_type slot_base = group_index * kGroupWidth;
         size_type skip_groups = 0;
 
         for (;;) {
@@ -1719,10 +1759,10 @@ private:
             } else {
                 // If it doesn't overflow, means it hasn't been found.
                 if (!group->is_overflow(group_pos)) {
-                    return nullptr;
+                    return this->last_slot();
                 }
             }
-            slot_base += kGroupSize;
+            slot_base += kGroupWidth;
             group++;
             if (group >= last_group) {
                 group = this->groups();
@@ -1734,7 +1774,7 @@ private:
                              ", skip_groups = " << skip_groups << std::endl;
             }
             if (skip_groups >= this->group_capacity()) {
-                return nullptr;
+                return this->last_slot();
             }
         }
     }
@@ -1749,12 +1789,12 @@ private:
         std::size_t hash_code = this->get_hash(key);
         size_type slot_index = this->index_for_hash(hash_code);
         std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
-        size_type group_index = slot_index / kGroupSize;
-        size_type group_pos = slot_index % kGroupSize;
+        size_type group_index = slot_index / kGroupWidth;
+        size_type group_pos = slot_index % kGroupWidth;
         const group_type * group = this->group_at(group_index);
         const group_type * last_group = this->last_group();
         
-        size_type slot_base = group_index * kGroupSize;
+        size_type slot_base = group_index * kGroupWidth;
         size_type skip_groups = 0;
 
         for (;;) {
@@ -1776,7 +1816,7 @@ private:
                     return this->slot_capacity();
                 }
             }
-            slot_base += kGroupSize;
+            slot_base += kGroupWidth;
             group++;
             if (group >= last_group) {
                 group = this->groups();
@@ -1799,13 +1839,13 @@ private:
         std::size_t hash_code = this->get_hash(key);
         size_type slot_index = this->index_for_hash(hash_code);
         std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
-        size_type group_index = slot_index / kGroupSize;
-        size_type group_pos = slot_index % kGroupSize;
+        size_type group_index = slot_index / kGroupWidth;
+        size_type group_pos = slot_index % kGroupWidth;
         group_type * group = this->group_at(group_index);
         group_type * last_group = this->last_group();
         
         size_type skip_groups = 0;
-        size_type slot_base = group_index * kGroupSize;
+        size_type slot_base = group_index * kGroupWidth;
 
         for (;;) {
             std::uint32_t empty_mask = group->match_empty();
@@ -1819,7 +1859,7 @@ private:
                     group->set_overflow(group_pos);
                 }
             }
-            slot_base += kGroupSize;
+            slot_base += kGroupWidth;
             group++;
             if (group >= last_group) {
                 group = this->groups();
