@@ -147,8 +147,8 @@ public:
 
     static constexpr bool kIsSwappableKV = kIsSwappableKey && kIsSwappableMapped;
 
-    static constexpr bool kIsNoexceptMoveAssignKey    = jstd::is_noexcept_move_assignable<key_type>::value;
-    static constexpr bool kIsNoexceptMoveAssignMapped = jstd::is_noexcept_move_assignable<mapped_type>::value;
+    static constexpr bool kIsMoveAssignKey    = std::is_move_assignable<key_type>::value;
+    static constexpr bool kIsMoveAssignMapped = std::is_move_assignable<mapped_type>::value;
 
     static constexpr bool is_slot_trivial_copyable =
             (std::is_trivially_copyable<value_type>::value ||
@@ -1234,7 +1234,7 @@ private:
                         used_mask = BitUtils::clearLowBit32(used_mask);
                         slot_type * old_slot = slot_base + used_pos;
                         assert(old_slot < old_last_slot);
-                        this->insert_no_grow(old_slot);
+                        this->insert_unique_and_no_grow(old_slot);
                         this->destroy_slot(old_slot);
                     }
                     slot_base += kGroupWidth;
@@ -1295,18 +1295,18 @@ private:
 
     JSTD_FORCED_INLINE
     void construct_empty_slot(slot_type * empty) {
-        static constexpr bool isNoexceptMoveAssignable = is_noexcept_move_assignable<value_type>::value;
-        static constexpr bool isMutableNoexceptMoveAssignable = is_noexcept_move_assignable<init_type>::value;
+        static constexpr bool isMoveAssignable = std::is_move_assignable<value_type>::value;
+        static constexpr bool isMutableMoveAssignable = std::is_move_assignable<init_type>::value;
 
         if ((!is_slot_trivial_destructor) && (!kIsPlainKV) &&
             (!kIsSwappableKV) && (!kIsSmallValueType) && kEnableExchange) {
             if (kIsLayoutCompatible) {
-                if (isMutableNoexceptMoveAssignable) {
+                if (isMutableMoveAssignable) {
                     this->construct_slot(empty);
                     return;
                 }
             } else {
-                if (isNoexceptMoveAssignable) {
+                if (isMoveAssignable) {
                     this->construct_slot(empty);
                     return;
                 }
@@ -1319,24 +1319,24 @@ private:
 
     JSTD_FORCED_INLINE
     void destroy_empty_slot(slot_type * empty) {
-        static constexpr bool isNoexceptMoveAssignable = is_noexcept_move_assignable<value_type>::value;
-        static constexpr bool isMutableNoexceptMoveAssignable = is_noexcept_move_assignable<init_type>::value;
+        static constexpr bool isMoveAssignable = std::is_move_assignable<value_type>::value;
+        static constexpr bool isMutableMoveAssignable = std::is_move_assignable<init_type>::value;
 
         if ((!is_slot_trivial_destructor) && (!kIsPlainKV) &&
             (!kIsSwappableKV) && (!kIsSmallValueType) && kEnableExchange) {
             if (kIsLayoutCompatible) {
-                if (isMutableNoexceptMoveAssignable) {
+                if (isMutableMoveAssignable) {
                     this->destroy_slot(empty);
                 }
             } else {
-                if (isNoexceptMoveAssignable) {
+                if (isMoveAssignable) {
                     this->destroy_slot(empty);
                 }
             }
         }
     }
 
-    template <typename T, bool hasSwapMethod, bool isNoexceptMoveAssign>
+    template <typename T, bool hasSwapMethod, bool isMoveAssign>
     struct swap_traits;
 
     template <typename T>
@@ -1372,7 +1372,7 @@ private:
             noexcept(std::is_nothrow_move_constructible<typename std::remove_const<T>::type>::value &&
                      std::is_nothrow_move_assignable<typename std::remove_const<T>::type>::value)
         {
-            // hasSwapMethod = false, isNoexceptMoveAssign = true
+            // hasSwapMethod = false, isMoveAssign = true
             typedef typename std::remove_const<T>::type non_const_type;
 
             using std::swap;
@@ -1386,7 +1386,7 @@ private:
         static void swap(Alloc * alloc, T * obj1, T * obj2)
             noexcept(std::is_nothrow_move_constructible<T>::value)
         {
-            // hasSwapMethod = false, isNoexceptMoveAssign = false
+            // hasSwapMethod = false, isMoveAssign = false
             static constexpr size_type kMinAlignment = 16;
             static constexpr size_type kAlignment = cmax(std::alignment_of<T>::value, kMinAlignment);
 
@@ -1401,10 +1401,10 @@ private:
         }
     };
 
-    template <typename T, bool isLayoutCompatible, bool isNoexceptMoveAssign>
+    template <typename T, bool isLayoutCompatible, bool isMoveAssign>
     struct slot_adapter;
 
-    template <typename T /*, bool isLayoutCompatible, bool isNoexceptMoveAssign */>
+    template <typename T /*, bool isLayoutCompatible, bool isMoveAssign */>
     struct slot_adapter<T, true, true> {
         typedef typename T::first_type                          first_type;
         typedef typename T::second_type                         second_type;
@@ -1415,13 +1415,13 @@ private:
             noexcept(std::is_nothrow_move_constructible<T>::value &&
                      std::is_nothrow_move_assignable<T>::value)
         {
-            static constexpr bool isNoexceptMoveAssignKey    = is_noexcept_move_assignable<mutable_first_type>::value;
-            static constexpr bool isNoexceptMoveAssignMapped = is_noexcept_move_assignable<second_type>::value;
+            static constexpr bool isMoveAssignKey    = std::is_move_assignable<mutable_first_type>::value;
+            static constexpr bool isMoveAssignMapped = std::is_move_assignable<second_type>::value;
 #if CLUSTER_USE_SWAP_TRAITS
-            swap_traits<mutable_first_type, kHasSwapKey, isNoexceptMoveAssignKey>::
+            swap_traits<mutable_first_type, kHasSwapKey, isMoveAssignKey>::
                 swap(alloc, &slot1->mutable_value.first, &slot2->mutable_value.first);
 
-            swap_traits<second_type, kHasSwapMapped, isNoexceptMoveAssignMapped>::
+            swap_traits<second_type, kHasSwapMapped, isMoveAssignMapped>::
                 swap(alloc, &slot1->mutable_value.second, &slot2->mutable_value.second);
 #else
             using std::swap;
@@ -1455,7 +1455,7 @@ private:
         }
     };
 
-    template <typename T /* , bool isLayoutCompatible, bool isNoexceptMoveAssign */>
+    template <typename T /* , bool isLayoutCompatible, bool isMoveAssign */>
     struct slot_adapter<T, true, false> {
         typedef typename T::first_type                          first_type;
         typedef typename T::second_type                         second_type;
@@ -1466,13 +1466,13 @@ private:
             noexcept(std::is_nothrow_move_constructible<T>::value &&
                      std::is_nothrow_move_assignable<T>::value)
         {
-            static constexpr bool isNoexceptMoveAssignKey    = is_noexcept_move_assignable<mutable_first_type>::value;
-            static constexpr bool isNoexceptMoveAssignMapped = is_noexcept_move_assignable<second_type>::value;
+            static constexpr bool isMoveAssignKey    = std::is_move_assignable<mutable_first_type>::value;
+            static constexpr bool isMoveAssignMapped = std::is_move_assignable<second_type>::value;
 #if CLUSTER_USE_SWAP_TRAITS
-            swap_traits<mutable_first_type, kHasSwapKey, isNoexceptMoveAssignKey>::
+            swap_traits<mutable_first_type, kHasSwapKey, isMoveAssignKey>::
                 swap(alloc, &slot1->mutable_value.first, &slot2->mutable_value.first);
 
-            swap_traits<second_type, kHasSwapMapped, isNoexceptMoveAssignMapped>::
+            swap_traits<second_type, kHasSwapMapped, isMoveAssignMapped>::
                 swap(alloc, &slot1->mutable_value.second, &slot2->mutable_value.second);
 #else
             using std::swap;
@@ -1502,7 +1502,7 @@ private:
         }
     };
 
-    template <typename T /*, bool isLayoutCompatible, bool isNoexceptMoveAssign */>
+    template <typename T /*, bool isLayoutCompatible, bool isMoveAssign */>
     struct slot_adapter<T, false, true> {
         typedef typename T::first_type                          first_type;
         typedef typename T::second_type                         second_type;
@@ -1519,13 +1519,13 @@ private:
             noexcept(std::is_nothrow_move_constructible<T>::value &&
                      std::is_nothrow_move_assignable<T>::value)
         {
-            static constexpr bool isNoexceptMoveAssignKey    = is_noexcept_move_assignable<first_type>::value;
-            static constexpr bool isNoexceptMoveAssignMapped = is_noexcept_move_assignable<second_type>::value;
+            static constexpr bool isMoveAssignKey    = std::is_move_assignable<first_type>::value;
+            static constexpr bool isMoveAssignMapped = std::is_move_assignable<second_type>::value;
 #if CLUSTER_USE_SWAP_TRAITS
-            swap_traits<first_type, kHasSwapKey, isNoexceptMoveAssignKey>::
+            swap_traits<first_type, kHasSwapKey, isMoveAssignKey>::
                 swap(alloc, &slot1->value.first, &slot2->value.first);
 
-            swap_traits<second_type, kHasSwapMapped, isNoexceptMoveAssignMapped>::
+            swap_traits<second_type, kHasSwapMapped, isMoveAssignMapped>::
                 swap(alloc, &slot1->value.second, &slot2->value.second);
 #else
             using std::swap;
@@ -1556,7 +1556,7 @@ private:
         }
     };
 
-    template <typename T /*, bool isLayoutCompatible, bool isNoexceptMoveAssign */>
+    template <typename T /*, bool isLayoutCompatible, bool isMoveAssign */>
     struct slot_adapter<T, false, false> {
         typedef typename T::first_type                          first_type;
         typedef typename T::second_type                         second_type;
@@ -1573,13 +1573,13 @@ private:
             noexcept(std::is_nothrow_move_constructible<T>::value &&
                      std::is_nothrow_move_assignable<T>::value)
         {
-            static constexpr bool isNoexceptMoveAssignKey    = is_noexcept_move_assignable<first_type>::value;
-            static constexpr bool isNoexceptMoveAssignMapped = is_noexcept_move_assignable<second_type>::value;
+            static constexpr bool isMoveAssignKey    = std::is_move_assignable<first_type>::value;
+            static constexpr bool isMoveAssignMapped = std::is_move_assignable<second_type>::value;
 #if CLUSTER_USE_SWAP_TRAITS
-            swap_traits<first_type, kHasSwapKey, isNoexceptMoveAssignKey>::
+            swap_traits<first_type, kHasSwapKey, isMoveAssignKey>::
                 swap(alloc, &slot1->value.first, &slot2->value.first);
 
-            swap_traits<second_type, kHasSwapMapped, isNoexceptMoveAssignMapped>::
+            swap_traits<second_type, kHasSwapMapped, isMoveAssignMapped>::
                 swap(alloc, &slot1->value.second, &slot2->value.second);
 #else
             using std::swap;
@@ -1623,12 +1623,12 @@ private:
     JSTD_FORCED_INLINE
     void exchange_slot(slot_type * src, slot_type * dest, slot_type * empty) {
         if (kIsLayoutCompatible) {
-            static constexpr bool isNoexceptMoveAssign = is_noexcept_move_assignable<init_type>::value;
-            slot_adapter<init_type, true, isNoexceptMoveAssign>
+            static constexpr bool isMoveAssign = std::is_move_assignable<init_type>::value;
+            slot_adapter<init_type, true, isMoveAssign>
                 ::exchange(&this->allocator_, src, dest, empty);
         } else {
-            static constexpr bool isNoexceptMoveAssign = is_noexcept_move_assignable<value_type>::value;
-            slot_adapter<value_type, false, isNoexceptMoveAssign>
+            static constexpr bool isMoveAssign = std::is_move_assignable<value_type>::value;
+            slot_adapter<value_type, false, isMoveAssign>
                 ::exchange(&this->allocator_, src, dest, empty);
         }
     }
@@ -1636,12 +1636,12 @@ private:
     JSTD_FORCED_INLINE
     void swap_slot(slot_type * slot1, slot_type * slot2) {
         if (kIsLayoutCompatible) {
-            static constexpr bool isNoexceptMoveAssign = is_noexcept_move_assignable<init_type>::value;
-            slot_adapter<init_type, true, isNoexceptMoveAssign>
+            static constexpr bool isMoveAssign = std::is_move_assignable<init_type>::value;
+            slot_adapter<init_type, true, isMoveAssign>
                 ::swap(&this->allocator_, slot1, slot2);
         } else {
-            static constexpr bool isNoexceptMoveAssign = is_noexcept_move_assignable<value_type>::value;
-            slot_adapter<value_type, false, isNoexceptMoveAssign>
+            static constexpr bool isMoveAssign = std::is_move_assignable<value_type>::value;
+            slot_adapter<value_type, false, isMoveAssign>
                 ::swap(&this->allocator_, slot1, slot2);
         }
     }
@@ -1649,12 +1649,12 @@ private:
     JSTD_FORCED_INLINE
     void swap_slot(slot_type * slot1, slot_type * slot2, slot_type * tmp) {
         if (kIsLayoutCompatible) {
-            static constexpr bool isNoexceptMoveAssign = is_noexcept_move_assignable<init_type>::value;
-            slot_adapter<init_type, true, isNoexceptMoveAssign>
+            static constexpr bool isMoveAssign = std::is_move_assignable<init_type>::value;
+            slot_adapter<init_type, true, isMoveAssign>
                 ::swap(&this->allocator_, slot1, slot2, tmp);
         } else {
-            static constexpr bool isNoexceptMoveAssign = is_noexcept_move_assignable<value_type>::value;
-            slot_adapter<value_type, false, isNoexceptMoveAssign>
+            static constexpr bool isMoveAssign = std::is_move_assignable<value_type>::value;
+            slot_adapter<value_type, false, isMoveAssign>
                 ::swap(&this->allocator_, slot1, slot2, tmp);
         }
     }
@@ -1662,12 +1662,12 @@ private:
     JSTD_FORCED_INLINE
     void swap_plain_slot(slot_type * slot1, slot_type * slot2, slot_type * tmp) {
         if (kIsLayoutCompatible) {
-            static constexpr bool isNoexceptMoveAssign = is_noexcept_move_assignable<init_type>::value;
-            slot_adapter<init_type, true, isNoexceptMoveAssign>
+            static constexpr bool isMoveAssign = std::is_move_assignable<init_type>::value;
+            slot_adapter<init_type, true, isMoveAssign>
                 ::swap_plain(&this->allocator_, slot1, slot2, tmp);
         } else {
-            static constexpr bool isNoexceptMoveAssign = is_noexcept_move_assignable<value_type>::value;
-            slot_adapter<value_type, false, isNoexceptMoveAssign>
+            static constexpr bool isMoveAssign = std::is_move_assignable<value_type>::value;
+            slot_adapter<value_type, false, isMoveAssign>
                 ::swap_plain(&this->allocator_, slot1, slot2, tmp);
         }
     }
@@ -1922,6 +1922,36 @@ private:
         assert(ctrl->is_empty());
         ctrl->set_used(ctrl_hash);
         return { slot, kIsNotExists };
+    }
+
+    ///
+    /// Use in rehash_impl()
+    ///
+    JSTD_FORCED_INLINE
+    void insert_unique_and_no_grow(slot_type * old_slot) {
+        assert(old_slot != nullptr);
+        slot_type * new_slot = this->insert_unique_and_no_grow(old_slot->value.first);
+        assert(new_slot != nullptr);
+
+        SlotPolicyTraits::construct(&this->allocator_, new_slot, old_slot);
+        this->slot_size_++;
+        assert(this->slot_size() <= this->slot_capacity());
+    }
+
+    template <typename KeyT>
+    JSTD_FORCED_INLINE
+    slot_type * insert_unique_and_no_grow(const KeyT & key) {
+        std::size_t hash_code = this->get_hash(key);
+        size_type slot_pos = this->index_for_hash(hash_code);
+        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
+
+        size_type slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
+        slot_type * slot = this->slot_at(slot_index);
+        ctrl_type * ctrl = this->ctrl_at(slot_index);
+
+        assert(ctrl->is_empty());
+        ctrl->set_used(ctrl_hash);
+        return slot;
     }
 
     template <bool AlwaysUpdate>
