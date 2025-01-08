@@ -59,6 +59,7 @@
 #include <limits>           // For std::numeric_limits<T>
 #include <initializer_list>
 #include <type_traits>
+#include <algorithm>        // For std::max()
 #include <utility>          // For std::pair<F, S>
 
 #include <assert.h>
@@ -202,8 +203,8 @@ public:
     // kMinCapacity must be >= 2
     static constexpr size_type kMinCapacity = 2;
 
-    static constexpr float kMinLoadFactorF = 0.2;
-    static constexpr float kMaxLoadFactorF = 0.875;
+    static constexpr float kMinLoadFactorF = 0.2f;
+    static constexpr float kMaxLoadFactorF = 0.875f;
     // Default load factor = 224 / 256 = 0.875
     static constexpr size_type kLoadFactorAmplify = 256;
     static constexpr size_type kDefaultMaxLoadFactor = 224;
@@ -501,7 +502,7 @@ public:
     //
     void rehash(size_type new_capacity) {
         size_type fit_to_now = this->shrink_to_fit_capacity(this->size());
-        new_capacity = std::max(fit_to_now, new_capacity);
+        new_capacity = (std::max)(fit_to_now, new_capacity);
         this->rehash_impl<false>(new_capacity);
     }
 
@@ -706,13 +707,13 @@ public:
         return (this->ctrls() + std::ptrdiff_t(slot_index));
     }
 
-    inline group_type group_at(size_type slot_index) noexcept {
+    inline group_type * group_at(size_type slot_index) noexcept {
         assert(slot_index <= this->slot_capacity());
         size_type group_idx = slot_index / kGroupWidth;
         return (this->groups() + std::ptrdiff_t(group_idx));
     }
 
-    inline const group_type group_at(size_type slot_index) const noexcept {
+    inline const group_type * group_at(size_type slot_index) const noexcept {
         assert(slot_index <= this->slot_capacity());
         size_type group_idx = slot_index / kGroupWidth;
         return (this->groups() + std::ptrdiff_t(group_idx));
@@ -757,11 +758,11 @@ private:
             { kEmptySlot }, { kEmptySlot }, { kEmptySlot }, { kEmptySlot }
         };
 
-        return const_cast<group_type *>(&s_empty_ctrls[0]);
+        return reinterpret_cast<group_type *>(const_cast<ctrl_type *>(&s_empty_ctrls[0]));
     }
 
     static ctrl_type * default_empty_ctrls() {
-        return const_cast<ctrl_type *>(this_type::default_empty_groups());
+        return reinterpret_cast<ctrl_type *>(this_type::default_empty_groups());
     }
 
     JSTD_FORCED_INLINE
@@ -774,8 +775,8 @@ private:
         return new_capacity;
     }
 
-    static constexpr size_type calc_slot_threshold(size_type mlf, size_type slot_capacity) {
-        constexpr size_type kSmallCapacity = kGroupWidth * 2;
+    static size_type calc_slot_threshold(size_type mlf, size_type slot_capacity) {
+        static constexpr size_type kSmallCapacity = kGroupWidth * 2;
 
         if (likely(slot_capacity > kSmallCapacity)) {
             return (slot_capacity * mlf / kLoadFactorAmplify);
@@ -783,8 +784,6 @@ private:
             /* When capacity is small, we allow 100% usage. */
             return slot_capacity;
         }
-
-        return capacity * kDefaultMaxLoadFactor / kLoadFactorAmplify;
     }
 
     size_type calc_slot_threshold(size_type slot_capacity) const {
@@ -1930,7 +1929,7 @@ private:
                 slot_base = 0;
             }
             if (unlikely(group == first_group)) {
-                return this->last_slot();
+                return this->slot_capacity();
             }
 #if CLUSTER_DISPLAY_DEBUG_INFO
             skip_groups++;

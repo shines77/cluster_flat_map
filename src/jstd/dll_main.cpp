@@ -1,9 +1,9 @@
 
-#include "jstd/hashmap/cluster_flat_map.hpp"
-
+#include <string>
 #include <utility>
 #include <type_traits>
 
+#include "jstd/hashmap/cluster_flat_map.hpp"
 #include "jstd/traits/type_traits.h"
 
 template <typename K, typename V>
@@ -42,6 +42,11 @@ int main()
     map_slot_type<std::string, std::size_t> slot2;
     printf("sizeof(map_slot_type<std::string, std::size_t> = %d\n",
            (int)sizeof(slot2));
+
+    jstd::cluster_flat_map<std::string, std::string> string_hash_map;
+
+    printf("string_hash_map.size() = %d\n", (int)string_hash_map.size());
+    printf("string_hash_map.max_load_factor() = %d\n", (int)string_hash_map.max_load_factor());
 
     return 0;
 }

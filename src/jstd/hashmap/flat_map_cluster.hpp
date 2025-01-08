@@ -195,37 +195,37 @@ public:
 
     inline bool is_empty(std::size_t pos) const {
         assert(pos < kGroupWidth);
-        ctrl_type * ctrl = &ctrls[pos];
+        const ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_empty();
     }
 
     inline bool is_used(std::size_t pos) const {
         assert(pos < kGroupWidth);
-        ctrl_type * ctrl = &ctrls[pos];
+        const ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_used();
     }
 
     inline bool is_overflow(std::size_t pos) const {
         assert(pos < kGroupWidth);
-        ctrl_type * ctrl = &ctrls[pos];
+        const ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_overflow();
     }
 
     inline bool is_overflow_strict(std::size_t pos) const {
         assert(pos < kGroupWidth);
-        ctrl_type * ctrl = &ctrls[pos];
+        const ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_overflow_strict();
     }
 
     bool is_equals(std::size_t pos, hash_type hash) {
         assert(pos < kGroupWidth);
-        ctrl_type * ctrl = &ctrls[pos];
+        const ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_equals(hash);
     }
 
     bool is_equals64(std::size_t pos, std::size_t hash) {
         assert(pos < kGroupWidth);
-        ctrl_type * ctrl = &ctrls[pos];
+        const ctrl_type * ctrl = &ctrls[pos];
         return ctrl->is_equals64(hash);
     }
 
@@ -269,7 +269,7 @@ public:
         
         __m128i match_mask = _mm_cmpeq_epi8(_mm_and_si128(ctrl_bits, mask_bits), empty_bits);
         int mask = _mm_movemask_epi8(match_mask);
-        return reinterpret_cast<std::uint32_t>(mask);
+        return static_cast<std::uint32_t>(mask);
     }
 
     inline std::uint32_t match_used() const {
@@ -297,7 +297,7 @@ public:
         if (kEmptySlot != 0b00000000 && kEmptySlot != 0b11111111) {
             mask = ~mask & 0xFFFF;
         }
-        return reinterpret_cast<std::uint32_t>(mask);
+        return static_cast<std::uint32_t>(mask);
     }
 
     inline std::uint32_t match_hash(hash_type hash) const {
