@@ -775,7 +775,7 @@ private:
     }
 
     static constexpr size_type calc_slot_threshold(size_type mlf, size_type slot_capacity) {
-        static constexpr size_type kSmallCapacity = kGroupWidth * 2;
+        constexpr size_type kSmallCapacity = kGroupWidth * 2;
 
         if (likely(slot_capacity > kSmallCapacity)) {
             return (slot_capacity * mlf / kLoadFactorAmplify);
@@ -1737,7 +1737,7 @@ private:
             static const size_type kCtrlFasterSeekPos = 4;
             if (likely(slot_pos < (kGroupWidth - kCtrlFasterSeekPos))) {
                 // Filter out the bits in the leading position
-                std::uint32_t non_excluded_mask = ^((std::uint32_t(1) << std::uint32_t(slot_pos)) - 1);
+                std::uint32_t non_excluded_mask = ~((std::uint32_t(1) << std::uint32_t(slot_pos)) - 1);
                 if (group < last_group) {
                     std::uint32_t used_mask = group->match_used();
                     used_mask &= non_excluded_mask;
