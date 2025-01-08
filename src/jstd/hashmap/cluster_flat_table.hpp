@@ -215,7 +215,7 @@ public:
     using AllocTraits = std::allocator_traits<allocator_type>;
 
     using GroupAllocTraits = typename std::allocator_traits<allocator_type>::template rebind_traits<group_type>;
-    using CtrlAllocTraits = typename std::allocator_traits<allocator_type>::template rebind_traits<ctrl_type>;    
+    using CtrlAllocTraits = typename std::allocator_traits<allocator_type>::template rebind_traits<ctrl_type>;
     using SlotAllocTraits = typename std::allocator_traits<allocator_type>::template rebind_traits<slot_type>;
 
     using hash_policy_t = typename hash_policy_selector<Hash>::type;
@@ -752,8 +752,15 @@ private:
         return new_capacity;
     }
 
-    size_type calc_slot_threshold(size_type now_slot_capacity) const {
-        return (now_slot_capacity * this->mlf_ / kLoadFactorAmplify);
+    size_type calc_slot_threshold(size_type slot_capacity) const {
+        static constexpr size_type kSmallCapacity = kGroupWidth * 2;
+
+        if (likely(slot_capacity > kSmallCapacity)) {
+            return (slot_capacity * this->mlf_ / kLoadFactorAmplify);
+        } else {
+            /* When capacity is small, we allow 100% usage. */
+            return slot_capacity;
+        }        
     }
 
     inline size_type shrink_to_fit_capacity(size_type init_capacity) const {
@@ -847,7 +854,7 @@ private:
         return (size_type)((std::uintptr_t)this->ctrls() >> 12);
     }
 
-    inline std::size_t get_hash(const key_type & key) const
+    inline std::size_t hash_for(const key_type & key) const
         noexcept(noexcept(this->hasher_(key))) {
 #if 1
         std::size_t hash_code = static_cast<std::size_t>(this->hasher_(key));
@@ -896,7 +903,7 @@ private:
 #endif
     }
 
-    inline std::uint8_t get_ctrl_hash(std::size_t hash_code) const noexcept {
+    inline std::uint8_t ctrl_for_hash(std::size_t hash_code) const noexcept {
         std::size_t ctrl_hash = this->ctrl_hasher(hash_code);
         std::uint8_t ctrl_hash8 = ctrl_type::hash_bits(ctrl_hash);
         return ctrl_hash8;
@@ -1013,7 +1020,7 @@ private:
 #endif
             this->ctrls_ = this_type::default_empty_ctrls();
             this->groups_ = this_type::default_empty_groups();
-        }        
+        }
     }
 
     void destroy_slots() {
@@ -1696,21 +1703,34 @@ private:
         if (this->size() != 0) {
             group_type * group = this->group_at(start_slot_index);
             group_type * last_group = this->last_group();
-            size_type slot_remain = start_slot_index % kGroupWidth;
-            size_type slot_base_index = start_slot_index - slot_remain;
-            // The two ways are equivalent.
-            // std::uint32_t excluded_mask = ^((std::uint32_t(1) << (std::uint32_t(slot_remain) + 1)) - 1);
-            std::uint32_t excluded_mask = -(std::uint32_t(1) << (std::uint32_t(slot_remain) + 1));
-            if (group < last_group) {
-                std::uint32_t used_mask = group->match_used();
-                used_mask &= excluded_mask;
-                if (likely(used_mask != 0)) {
-                    std::uint32_t used_pos = BitUtils::bsf32(used_mask);
-                    size_type slot_index = slot_base_index + used_pos;
-                    return slot_index;
+            size_type slot_pos = start_slot_index % kGroupWidth;
+            size_type slot_base_index = start_slot_index - slot_pos;
+            // Last 4 items use ctrl seek, maybe faster.
+            static const size_type kCtrlFasterSeekPos = 4;
+            if (likely(slot_pos < (kGroupWidth - kCtrlFasterSeekPos))) {
+                // Filter out the bits in the leading position
+                std::uint32_t non_excluded_mask = ^((std::uint32_t(1) << std::uint32_t(slot_pos)) - 1);
+                if (group < last_group) {
+                    std::uint32_t used_mask = group->match_used();
+                    used_mask &= non_excluded_mask;
+                    if (likely(used_mask != 0)) {
+                        std::uint32_t used_pos = BitUtils::bsf32(used_mask);
+                        size_type slot_index = slot_base_index + used_pos;
+                        return slot_index;
+                    }
+                    slot_base_index += kGroupWidth;
+                    group++;
                 }
-                slot_base_index += kGroupWidth;
-                group++;
+            } else {
+                size_type last_index = slot_base_index + kGroupWidth;
+                ctrl_type * ctrl = this->ctrl_at(start_slot_index);
+                while (start_slot_index < last_index) {
+                    if (ctrl->is_used()) {
+                        return start_slot_index;
+                    }
+                    ++ctrl;
+                    ++start_slot_index;
+                }
             }
             for (; group < last_group; ++group) {
                 std::uint32_t used_mask = group->match_used();
@@ -1734,15 +1754,15 @@ private:
 
     template <typename KeyT>
     const slot_type * find_impl(const KeyT & key) const {
-        std::size_t hash_code = this->get_hash(key);
+        std::size_t hash_code = this->hash_for(key);
         size_type slot_index = this->index_for_hash(hash_code);
-        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
+        std::uint8_t ctrl_hash = this->ctrl_for_hash(hash_code);
         size_type group_index = slot_index / kGroupWidth;
         size_type group_pos = slot_index % kGroupWidth;
         const group_type * group = this->group_at(group_index);
         const group_type * first_group = group;
         const group_type * last_group = this->last_group();
-        
+
         size_type slot_base = group_index * kGroupWidth;
         size_type skip_groups = 0;
 
@@ -1792,9 +1812,9 @@ private:
 
     template <typename KeyT>
     size_type find_index(const KeyT & key) const {
-        std::size_t hash_code = this->get_hash(key);
+        std::size_t hash_code = this->hash_for(key);
         size_type slot_pos = this->index_for_hash(hash_code);
-        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
+        std::uint8_t ctrl_hash = this->ctrl_for_hash(hash_code);
         return this->find_index(key, slot_pos, ctrl_hash);
     }
 
@@ -1806,7 +1826,7 @@ private:
         const group_type * group = this->group_at(group_index);
         const group_type * first_group = group;
         const group_type * last_group = this->last_group();
-        
+
         size_type slot_base = group_index * kGroupWidth;
         size_type skip_groups = 0;
 
@@ -1857,7 +1877,7 @@ private:
         group_type * group = this->group_at(group_index);
         group_type * first_group = group;
         group_type * last_group = this->last_group();
-        
+
         size_type skip_groups = 0;
         size_type slot_base = group_index * kGroupWidth;
 
@@ -1898,9 +1918,9 @@ private:
     JSTD_NO_INLINE
     std::pair<slot_type *, bool>
     find_and_insert(const KeyT & key) {
-        std::size_t hash_code = this->get_hash(key);
+        std::size_t hash_code = this->hash_for(key);
         size_type slot_pos = this->index_for_hash(hash_code);
-        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
+        std::uint8_t ctrl_hash = this->ctrl_for_hash(hash_code);
 
         size_type slot_index = this->find_index(key, slot_pos, ctrl_hash);
         if (slot_index != this->slot_capacity()) {
@@ -1914,7 +1934,7 @@ private:
 
             slot_pos = this->index_for_hash(hash_code);
             // Ctrl hash will not change
-            // ctrl_hash = this->get_ctrl_hash(hash_code);
+            // ctrl_hash = this->ctrl_for_hash(hash_code);
         }
 
         slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
@@ -1939,9 +1959,9 @@ private:
     template <typename KeyT>
     JSTD_FORCED_INLINE
     slot_type * insert_unique_and_no_grow(const KeyT & key) {
-        std::size_t hash_code = this->get_hash(key);
+        std::size_t hash_code = this->hash_for(key);
         size_type slot_pos = this->index_for_hash(hash_code);
-        std::uint8_t ctrl_hash = this->get_ctrl_hash(hash_code);
+        std::uint8_t ctrl_hash = this->ctrl_for_hash(hash_code);
 
         size_type slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
         slot_type * slot = this->slot_at(slot_index);
