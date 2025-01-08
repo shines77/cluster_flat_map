@@ -45,8 +45,10 @@ int main()
 
     jstd::cluster_flat_map<std::string, std::string> string_hash_map;
 
+    string_hash_map.insert(std::make_pair(std::string("abc"), std::string("123")));
+
     printf("string_hash_map.size() = %d\n", (int)string_hash_map.size());
-    printf("string_hash_map.max_load_factor() = %d\n", (int)string_hash_map.max_load_factor());
+    printf("string_hash_map.max_load_factor() = %0.3f\n", string_hash_map.max_load_factor());
 
     return 0;
 }

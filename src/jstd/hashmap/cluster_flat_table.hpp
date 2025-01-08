@@ -1120,7 +1120,7 @@ private:
     inline void grow_if_necessary() {
         // The growth rate is 2 times
         size_type new_capacity = this->slot_capacity() * 2;
-        this->rehash_impl<false, true>(new_capacity);
+        this->rehash_impl<false>(new_capacity);
     }
 
     bool is_valid_capacity(size_type capacity) const {
@@ -1802,7 +1802,7 @@ private:
 
                     size_type slot_pos = slot_base + match_pos;
                     const slot_type * slot = this->slot_at(slot_pos);
-                    if (likely(this->key_equal_()(key, slot->value.first))) {
+                    if (likely(this->key_equal_(key, slot->value.first))) {
                         return slot;
                     }
                 } while (match_mask != 0);
@@ -1866,7 +1866,7 @@ private:
 
                     size_type slot_index = slot_base + match_pos;
                     const slot_type * slot = this->slot_at(slot_index);
-                    if (likely(this->key_equal_()(key, slot->value.first))) {
+                    if (likely(this->key_equal_(key, slot->value.first))) {
                         return slot_index;
                     }
                 } while (match_mask != 0);
@@ -1884,7 +1884,7 @@ private:
                 slot_base = 0;
             }
             if (unlikely(group == first_group)) {
-                return this->last_slot();
+                return this->slot_capacity();
             }
 #if CLUSTER_DISPLAY_DEBUG_INFO
             skip_groups++;

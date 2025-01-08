@@ -97,7 +97,7 @@ public:
     }
     flat_map_iterator(hashmap_type * owner, size_type index) noexcept
         : owner_(const_cast<const hashmap_type *>(owner)),
-          index_(reinterpret_cast<ssize_type>(index)) {
+          index_(static_cast<ssize_type>(index)) {
     }
     flat_map_iterator(const hashmap_type * owner, size_type index) noexcept
         : owner_(owner), index_(reinterpret_cast<ssize_type>(index)) {
@@ -140,14 +140,6 @@ public:
     }
 
     friend bool operator != (const flat_map_iterator & lhs, const opp_flat_map_iterator & rhs) noexcept {
-        return (lhs.index() != rhs.index()) || (lhs.owner() != rhs.owner());
-    }
-
-    friend bool operator == (const opp_flat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
-        return (lhs.index() == rhs.index()) && (lhs.owner() == rhs.owner());
-    }
-
-    friend bool operator != (const opp_flat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
         return (lhs.index() != rhs.index()) || (lhs.owner() != rhs.owner());
     }
 
@@ -331,14 +323,6 @@ public:
     }
 
     friend bool operator != (const flat_map_iterator & lhs, const opp_flat_map_iterator & rhs) noexcept {
-        return (lhs.slot() != rhs.slot());
-    }
-
-    friend bool operator == (const opp_flat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
-        return (lhs.slot() == rhs.slot());
-    }
-
-    friend bool operator != (const opp_flat_map_iterator & lhs, const flat_map_iterator & rhs) noexcept {
         return (lhs.slot() != rhs.slot());
     }
 

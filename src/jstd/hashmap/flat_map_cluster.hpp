@@ -309,7 +309,7 @@ public:
         __m128i hash_bits  = _mm_set1_epi8(hash);
         __m128i match_mask = _mm_cmpeq_epi8(_mm_and_si128(ctrl_bits, mask_bits), hash_bits);
         int mask = _mm_movemask_epi8(match_mask);
-        return reinterpret_cast<std::uint32_t>(mask);
+        return static_cast<std::uint32_t>(mask);
     }
 
 private:
