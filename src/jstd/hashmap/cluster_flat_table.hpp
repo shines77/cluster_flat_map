@@ -788,7 +788,7 @@ private:
     }
 
     size_type calc_slot_threshold(size_type slot_capacity) const {
-        this_type::calc_slot_threshold(this->mlf_, slot_capacity);
+        return this_type::calc_slot_threshold(this->mlf_, slot_capacity);
     }
 
     inline size_type shrink_to_fit_capacity(size_type init_capacity) const {
