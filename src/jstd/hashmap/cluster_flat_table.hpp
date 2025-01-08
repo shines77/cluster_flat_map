@@ -200,11 +200,13 @@ public:
 
     static constexpr size_type kDefaultCapacity = 0;
     // kMinCapacity must be >= 2
-    static constexpr size_type kMinCapacity = 4;
+    static constexpr size_type kMinCapacity = 2;
 
+    static constexpr float kMinLoadFactorF = 0.2;
+    static constexpr float kMaxLoadFactorF = 0.875;
     // Default load factor = 224 / 256 = 0.875
-    static constexpr size_type kDefaultMaxLoadFactor = 224;
     static constexpr size_type kLoadFactorAmplify = 256;
+    static constexpr size_type kDefaultMaxLoadFactor = 224;
 
     static constexpr size_type kSkipGroupsLimit = 5;
 
@@ -245,10 +247,6 @@ private:
     static constexpr bool kIsNotExists = false;
     static constexpr bool kIsExists = true;
 
-    static constexpr size_type calcDefaultLoadFactor(size_type capacity) {
-        return capacity * kDefaultMaxLoadFactor / kLoadFactorAmplify;
-    }
-
 public:
     cluster_flat_table() : cluster_flat_table(kDefaultCapacity) {}
 
@@ -256,7 +254,7 @@ public:
                                 key_equal const & pred = key_equal(),
                                 allocator_type const & allocator = allocator_type())
         : groups_(nullptr), ctrls_(nullptr), slots_(nullptr), slot_size_(0), slot_mask_(static_cast<size_type>(capacity - 1)),
-          slot_threshold_(calcDefaultLoadFactor(capacity)), mlf_(kDefaultMaxLoadFactor) {
+          slot_threshold_(calc_slot_threshold(kDefaultMaxLoadFactor, capacity)), mlf_(kDefaultMaxLoadFactor) {
         this->reserve(capacity);
     }
 
@@ -401,19 +399,31 @@ public:
     ///
     /// Hash policy
     ///
-    double load_factor() const {
+    float load_factor() const {
         if (this->slot_capacity() != 0)
-            return ((double)this->slot_size() / this->slot_capacity());
+            return ((float)this->slot_size() / this->slot_capacity());
         else
             return 0.0;
     }
 
-    double max_load_factor() const {
-        return ((double)this->mlf_ / kLoadFactorAmplify);
+    float max_load_factor() const {
+        return ((float)this->mlf_ / kLoadFactorAmplify);
     }
 
-    void max_load_factor(double mlf) const {
-        // TODO: mlf
+    void max_load_factor(float mlf) const {
+        // mlf: [0.2, 0.875]
+        if (mlf < kMinLoadFactorF)
+            mlf = kMinLoadFactorF;
+        if (mlf > kMaxLoadFactorF)
+            mlf = kMaxLoadFactorF;
+        size_type mlf_int = static_cast<size_type>((float)kLoadFactorAmplify * mlf);
+        this->mlf_ = mlf_int;
+
+        size_type new_slot_threshold = this->calc_slot_threshold(this->slot_size());
+        size_type new_slot_capacity = this->calc_capacity(new_slot_threshold);
+        if (new_slot_capacity > this->slot_capacity()) {
+            this->rehash(new_slot_capacity);
+        }
     }
 
     ///
@@ -468,6 +478,8 @@ public:
     ///
 
     //
+    // See: https://en.cppreference.com/w/cpp/container/unordered_map/reserve
+    //
     // Sets the number of buckets to the number needed to accommodate
     // at least count elements without exceeding maximum load factor
     // and rehashes the container, i.e. puts the elements into
@@ -479,7 +491,17 @@ public:
         this->rehash_impl<false>(new_capacity);
     }
 
+    //
+    // See: https://en.cppreference.com/w/cpp/container/unordered_map/rehash
+    //
+    // Changes the number of buckets to a value n that is not less than count
+    // and satisfies n >= std::ceil(size() / max_load_factor()), then rehashes the container,
+    // i.e. puts the elements into appropriate buckets considering that
+    // total number of buckets has changed.
+    //
     void rehash(size_type new_capacity) {
+        size_type fit_to_now = this->shrink_to_fit_capacity(this->size());
+        new_capacity = std::max(fit_to_now, new_capacity);
         this->rehash_impl<false>(new_capacity);
     }
 
@@ -752,15 +774,21 @@ private:
         return new_capacity;
     }
 
-    size_type calc_slot_threshold(size_type slot_capacity) const {
+    static constexpr size_type calc_slot_threshold(size_type mlf, size_type slot_capacity) {
         static constexpr size_type kSmallCapacity = kGroupWidth * 2;
 
         if (likely(slot_capacity > kSmallCapacity)) {
-            return (slot_capacity * this->mlf_ / kLoadFactorAmplify);
+            return (slot_capacity * mlf / kLoadFactorAmplify);
         } else {
             /* When capacity is small, we allow 100% usage. */
             return slot_capacity;
-        }        
+        }
+
+        return capacity * kDefaultMaxLoadFactor / kLoadFactorAmplify;
+    }
+
+    size_type calc_slot_threshold(size_type slot_capacity) const {
+        this_type::calc_slot_threshold(this->mlf_, slot_capacity);
     }
 
     inline size_type shrink_to_fit_capacity(size_type init_capacity) const {

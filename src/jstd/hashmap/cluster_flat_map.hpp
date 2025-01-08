@@ -284,10 +284,10 @@ public:
     ///
     /// Hash policy
     ///
-    double load_factor() const { return table_.load_factor(); }
-    double max_load_factor() const { return table_.max_load_factor(); }
+    float load_factor() const { return table_.load_factor(); }
+    float max_load_factor() const { return table_.max_load_factor(); }
 
-    void max_load_factor(double mlf) const { table_.max_load_factor(mlf); }
+    void max_load_factor(float mlf) const { table_.max_load_factor(mlf); }
 
     ///
     /// Hash policy
