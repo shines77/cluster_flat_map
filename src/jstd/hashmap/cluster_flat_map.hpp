@@ -297,7 +297,7 @@ public:
     }
 
     void rehash(size_type new_capacity) {
-        table_.resize(new_capacity);
+        table_.rehash(new_capacity);
     }
 
     void shrink_to_fit(bool read_only = false) {

@@ -265,7 +265,7 @@ public:
           , groups_alloc_(nullptr)
 #endif
     {
-        this->reserve(capacity);
+        this->create_slots<true>(capacity);
     }
 
     cluster_flat_table(cluster_flat_table const & other) {
@@ -528,7 +528,7 @@ public:
     void rehash(size_type new_capacity) {
         size_type fit_to_now = this->shrink_to_fit_capacity(this->size());
         new_capacity = (std::max)(fit_to_now, new_capacity);
-        this->rehash_impl<false>(new_capacity);
+        this->rehash_impl<true>(new_capacity);
     }
 
     void shrink_to_fit(bool read_only = false) {
@@ -1222,7 +1222,9 @@ private:
             this->slot_size_ = 0;
             this->slot_mask_ = 0;
             this->slot_threshold_ = 0;
+#if CLUSTER_USE_SEPARATE_SLOTS
             this->groups_alloc_ = this_type::default_empty_groups();
+#endif
         } else {
             this->destroy_data();
         }
@@ -1241,7 +1243,8 @@ private:
 
         size_type new_capacity;
         if (isInitialize) {
-            new_capacity = this->calc_capacity(init_capacity);
+            new_capacity = this->shrink_to_fit_capacity(init_capacity);
+            new_capacity = this->calc_capacity(new_capacity);
             assert(new_capacity > 0);
             assert(new_capacity >= kMinCapacity);
         } else {
@@ -2026,6 +2029,17 @@ private:
         return { slot_index, kIsNotExists };
     }
 
+    template <typename KeyT>
+    JSTD_FORCED_INLINE
+    size_type insert_unique_and_no_grow(const KeyT & key) {
+        std::size_t hash_code = this->hash_for(key);
+        size_type slot_pos = this->index_for_hash(hash_code);
+        std::uint8_t ctrl_hash = this->ctrl_for_hash(hash_code);
+
+        size_type slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
+        return slot_index;
+    }
+
     ///
     /// Use in rehash_impl()
     ///
@@ -2039,17 +2053,6 @@ private:
         SlotPolicyTraits::construct(&this->allocator_, new_slot, old_slot);
         this->slot_size_++;
         assert(this->slot_size() <= this->slot_capacity());
-    }
-
-    template <typename KeyT>
-    JSTD_FORCED_INLINE
-    size_type insert_unique_and_no_grow(const KeyT & key) {
-        std::size_t hash_code = this->hash_for(key);
-        size_type slot_pos = this->index_for_hash(hash_code);
-        std::uint8_t ctrl_hash = this->ctrl_for_hash(hash_code);
-
-        size_type slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
-        return slot_index;
     }
 
     template <bool AlwaysUpdate>
