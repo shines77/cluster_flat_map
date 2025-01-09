@@ -15,6 +15,7 @@
 
 #include <string>
 #include <tuple>
+#include <memory>       // For std::allocator<T>
 #include <utility>      // For std::pair<T1, T2>
 #include <type_traits>
 
@@ -175,24 +176,98 @@ struct remove_all {
 template <typename T>
 using remove_all_t = typename remove_all<T>::type;
 
+template <typename T>
+struct is_plain_type {
+    static constexpr bool value = (std::is_arithmetic<T>::value || std::is_enum<T>::value);
+};
+
 template <typename T1, typename T2>
 struct is_same_ex : public std::is_same<typename remove_cvref<T1>::type,
                                         typename remove_cvref<T2>::type> {
 };
 
-template <typename T>
-struct is_noexcept_move_constructible {
-    static constexpr bool value =
-        !(!std::is_nothrow_move_constructible<T>::value &&
-		   std::is_copy_constructible<T>::value);
+template <typename T, typename = void>
+struct is_complete : public std::false_type {
 };
 
 template <typename T>
-struct is_noexcept_move_assignable {
-    static constexpr bool value =
-        !(!std::is_nothrow_move_assignable<T>::value &&
-		   std::is_copy_assignable<T>::value);
+struct is_complete<T, void_t<int[sizeof(T)]> > : public std::true_type {
 };
+
+template <typename T>
+using is_complete_and_move_constructible = typename std::conditional<is_complete<T>::value,
+                                            std::is_move_constructible<T>, std::false_type>::type;
+
+//////////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename U>
+using is_similar = std::is_same<remove_cvref_t<T>, remove_cvref_t<U> >;
+
+template <typename, typename...>
+struct is_similar_to_any : std::false_type
+{
+};
+
+template <typename T, typename U, typename ... Us>
+struct is_similar_to_any<T, U, Us...>
+    : std::conditional<is_similar<T, U>::value, is_similar<T, U>,
+                       is_similar_to_any<T, Us...> >::type
+{
+};
+
+template <typename T, typename = void>
+struct is_transparent : public std::false_type {};
+
+template <typename T>
+struct is_transparent<T, void_t<typename T::is_transparent>>
+    : public std::true_type {};
+
+template <typename T, typename Hash, typename KeyEqual>
+struct are_transparent {
+    static const bool value =
+        is_transparent<Hash>::value && is_transparent<KeyEqual>::value;
+};
+
+template <typename Key, typename UnorderedMap>
+struct transparent_non_iterable {
+    typedef typename UnorderedMap::hasher           hash;
+    typedef typename UnorderedMap::key_equal        key_equal;
+    typedef typename UnorderedMap::iterator         iterator;
+    typedef typename UnorderedMap::const_iterator   const_iterator;
+
+    static const bool value =
+        are_transparent<Key, hash, key_equal>::value &&
+        !std::is_convertible<Key, iterator>::value &&
+        !std::is_convertible<Key, const_iterator>::value;
+};
+
+template <typename K, typename key_type, bool is_transparent>
+struct key_arg_selector {
+    // Transparent. Forward `K`.
+    typedef K type;
+};
+
+template <typename K, typename key_type>
+struct key_arg_selector<K, key_type, false> {
+    // Not transparent. Always use `key_type`.
+    typedef key_type type;
+};
+
+template <bool is_transparent>
+struct KeyArgSelector {
+    // Transparent. Forward `K`.
+    template <typename K, typename key_type>
+    using type = K;
+};
+
+template <>
+struct KeyArgSelector<false> {
+    // Not transparent. Always use `key_type`.
+    template <typename K, typename key_type>
+    using type = key_type;
+};
+
+//////////////////////////////////////////////////////////////////////////////////
 
 //
 // is_relocatable<T>
@@ -231,6 +306,76 @@ struct is_call_possible<Caller, ReturnType(Args...),
         ), ReturnType>::value
     >::type
 > : public std::true_type {};
+
+template <typename T>
+struct is_noexcept_move_constructible {
+    static constexpr bool value =
+        (std::is_nothrow_move_constructible<T>::value ||
+		   !std::is_copy_constructible<T>::value);
+};
+
+template <typename T>
+struct is_noexcept_move_assignable {
+    static constexpr bool value =
+        (std::is_nothrow_move_assignable<T>::value ||
+		   !std::is_copy_assignable<T>::value);
+};
+
+//////////////////////////////////////////////////////////////////////////////////
+
+struct if_constexpr_void_else {
+    void operator()() const {}
+};
+
+template <bool Boolean, typename F, typename G = if_constexpr_void_else>
+void if_constexpr(F f, G g = { })
+{
+    std::get<Boolean ? 0 : 1>(std::forward_as_tuple(f, g))();
+}
+
+template <bool Boolean, typename T, typename std::enable_if<Boolean>::type * = nullptr>
+void copy_assign_if(T & x, const T & y)
+{
+    x = y;
+}
+
+template <bool Boolean, typename T, typename std::enable_if<!Boolean>::type * = nullptr>
+void copy_assign_if(T &, const T &)
+{
+    /* Do nothing ! */
+}
+
+template <bool Boolean, typename T, typename std::enable_if<Boolean>::type * = nullptr>
+void move_assign_if(T & x, T & y)
+{
+    x = std::move(y);
+}
+
+template <bool Boolean, typename T, typename std::enable_if<!Boolean>::type * = nullptr>
+void move_assign_if(T &, T &) {
+    /* Do nothing ! */
+}
+
+template <bool Boolean, typename T, typename std::enable_if<Boolean>::type * = nullptr>
+void swap_if(T & x, T & y)
+{
+    using std::swap;
+    swap(x, y);
+}
+
+template <bool Boolean, typename T, typename std::enable_if<!Boolean>::type * = nullptr>
+void swap_if(T &, T &)
+{
+    /* Do nothing ! */
+}
+
+template <typename Allocator>
+struct is_std_allocator : public std::false_type {};
+
+template <typename T>
+struct is_std_allocator<std::allocator<T>> : public std::true_type {};
+
+//////////////////////////////////////////////////////////////////////////////////
 
 //
 // See: https://stackoverflow.com/questions/17201329/c11-ways-of-finding-if-a-type-has-member-function-or-supports-operator
@@ -548,6 +693,45 @@ struct has_member_swap {
     static constexpr bool value = std::is_same<decltype(check<T>(nullptr)), std::true_type>::value;
 };
 
+namespace type_traits_detail {
+    using std::swap;
+
+    template <typename T, typename = void>
+    struct is_nothrow_swappable_helper {
+        static constexpr bool const value = false;
+    };
+
+    template <typename T>
+    struct is_nothrow_swappable_helper<T,
+            void_t<decltype(swap(std::declval<T &>(), std::declval<T &>()))> > {
+        static constexpr bool const value = noexcept(swap(std::declval<T &>(), std::declval<T &>()));
+    };
+
+    template <typename T, typename = void>
+    struct is_swappable_helper {
+        static constexpr bool const value = false;
+    };
+
+    template <typename T>
+    struct is_swappable_helper<T,
+            void_t<decltype(swap(std::declval<T &>(), std::declval<T &>()))> > {
+        static constexpr bool const value = true;
+    };
+
+} // namespace type_traits_detail
+
+template <typename T>
+struct is_nothrow_swappable : public std::integral_constant<bool,
+                                        (is_plain_type<T>::value || type_traits_detail::is_nothrow_swappable_helper<T>::value)>
+{
+};
+
+template <typename T>
+struct is_swappable : public std::integral_constant<bool,
+                                (is_plain_type<T>::value || type_traits_detail::is_swappable_helper<T>::value)>
+{
+};
+
 //////////////////////////////////////////////////////////////////////////////////
 
 template <typename Pair, typename = std::true_type>
@@ -626,41 +810,6 @@ public:
                                   (PairOffsetOf<Pair>::kFirst == 0) &&
                                   isLayoutCompatible<ConstPair>() &&
                                   isLayoutCompatible<MutablePair>();
-};
-
-//////////////////////////////////////////////////////////////////////////////////
-
-template <typename T, typename = void>
-struct is_transparent : std::false_type {};
-
-template <typename T>
-struct is_transparent<T, void_t<typename T::is_transparent>>
-    : std::true_type {};
-
-template <typename K, typename key_type, bool is_transparent>
-struct key_arg_selector {
-    // Transparent. Forward `K`.
-    typedef K type;
-};
-
-template <typename K, typename key_type>
-struct key_arg_selector<K, key_type, false> {
-    // Not transparent. Always use `key_type`.
-    typedef key_type type;
-};
-
-template <bool is_transparent>
-struct KeyArgSelector {
-    // Transparent. Forward `K`.
-    template <typename K, typename key_type>
-    using type = K;
-};
-
-template <>
-struct KeyArgSelector<false> {
-    // Not transparent. Always use `key_type`.
-    template <typename K, typename key_type>
-    using type = key_type;
 };
 
 //////////////////////////////////////////////////////////////////////////////////

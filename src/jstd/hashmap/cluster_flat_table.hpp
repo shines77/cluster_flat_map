@@ -121,7 +121,7 @@ public:
     static constexpr bool kUseIndexSalt = false;
     static constexpr bool kEnableExchange = true;
 
-    static constexpr bool kIsTransparent = (detail::is_transparent<Hash>::value && detail::is_transparent<KeyEqual>::value);
+    static constexpr bool kIsTransparent = (jstd::is_transparent<Hash>::value && jstd::is_transparent<KeyEqual>::value);
     static constexpr bool kIsLayoutCompatible = jstd::is_layout_compatible_kv<key_type, mapped_type>::value;
 
     static constexpr size_type npos = static_cast<size_type>(-1);
@@ -135,16 +135,16 @@ public:
 
     static constexpr size_type kGroupWidth = group_type::kGroupWidth;
 
-    static constexpr bool kIsPlainKey    = detail::is_plain_type<key_type>::value;
-    static constexpr bool kIsPlainMapped = detail::is_plain_type<mapped_type>::value;
+    static constexpr bool kIsPlainKey    = jstd::is_plain_type<key_type>::value;
+    static constexpr bool kIsPlainMapped = jstd::is_plain_type<mapped_type>::value;
 
     static constexpr bool kIsPlainKV = kIsPlainKey && kIsPlainMapped;
 
     static constexpr bool kHasSwapKey    = jstd::has_member_swap<key_type, key_type &>::value;
     static constexpr bool kHasSwapMapped = jstd::has_member_swap<mapped_type, mapped_type &>::value;
 
-    static constexpr bool kIsSwappableKey    = detail::is_swappable<key_type>::value;
-    static constexpr bool kIsSwappableMapped = detail::is_swappable<mapped_type>::value;
+    static constexpr bool kIsSwappableKey    = jstd::is_swappable<key_type>::value;
+    static constexpr bool kIsSwappableMapped = jstd::is_swappable<mapped_type>::value;
 
     static constexpr bool kIsSwappableKV = kIsSwappableKey && kIsSwappableMapped;
 
@@ -161,20 +161,20 @@ public:
             (std::is_trivially_destructible<value_type>::value ||
             (std::is_trivially_destructible<key_type>::value &&
              std::is_trivially_destructible<mapped_type>::value) ||
-            (detail::is_plain_type<key_type>::value &&
-             detail::is_plain_type<mapped_type>::value));
+            (jstd::is_plain_type<key_type>::value &&
+             jstd::is_plain_type<mapped_type>::value));
 
     static constexpr size_type kSizeTypeLength = sizeof(std::size_t);
 
     static constexpr bool kIsSmallKeyType   = (sizeof(key_type)    <= kSizeTypeLength * 2);
     static constexpr bool kIsSmallValueType = (sizeof(mapped_type) <= kSizeTypeLength * 2);
 
-    static constexpr bool kDetectIsIndirectKey = !(detail::is_plain_type<key_type>::value ||
+    static constexpr bool kDetectIsIndirectKey = !(jstd::is_plain_type<key_type>::value ||
                                                   (sizeof(key_type) <= kSizeTypeLength * 2) ||
                                                  ((sizeof(key_type) <= (kSizeTypeLength * 4)) &&
                                                    is_slot_trivial_destructor));
 
-    static constexpr bool kDetectIsIndirectValue = !(detail::is_plain_type<mapped_type>::value ||
+    static constexpr bool kDetectIsIndirectValue = !(jstd::is_plain_type<mapped_type>::value ||
                                                     (sizeof(mapped_type) <= kSizeTypeLength * 2) ||
                                                    ((sizeof(mapped_type) <= (kSizeTypeLength * 4)) &&
                                                      is_slot_trivial_destructor));
