@@ -191,7 +191,9 @@ public:
     //using slot_type = flat_map_slot_storage<type_policy, kIsIndirectKey, kIsIndirectValue>;
 
     static constexpr size_type kCacheLineSize = 64;
-    static constexpr size_type kActualSlotAlignment = alignof(slot_type);
+    static constexpr size_type kGroupAlignment = compile_time::is_pow2<alignof(group_type)>::value ?
+                                                 jstd::cmax(alignof(group_type), kCacheLineSize) :
+                                                 alignof(group_type);
     static constexpr size_type kSlotAlignment = compile_time::is_pow2<alignof(slot_type)>::value ?
                                                 jstd::cmax(alignof(slot_type), kCacheLineSize) :
                                                 alignof(slot_type);
@@ -225,13 +227,16 @@ public:
 
 private:
     group_type *    groups_;
-    ctrl_type *     ctrls_;
     slot_type *     slots_;
     size_type       slot_size_;
     size_type       slot_mask_;     // slot_capacity = slot_mask + 1
     size_type       slot_threshold_;
 
     size_type       mlf_;
+
+#if CLUSTER_USE_SEPARATE_SLOTS
+    group_type *    groups_alloc_;
+#endif
 
 #if CLUSTER_USE_HASH_POLICY
     hash_policy_t           hash_policy_;
@@ -254,8 +259,12 @@ public:
     explicit cluster_flat_table(size_type capacity, hasher const & hash = hasher(),
                                 key_equal const & pred = key_equal(),
                                 allocator_type const & allocator = allocator_type())
-        : groups_(nullptr), ctrls_(nullptr), slots_(nullptr), slot_size_(0), slot_mask_(static_cast<size_type>(capacity - 1)),
-          slot_threshold_(calc_slot_threshold(kDefaultMaxLoadFactor, capacity)), mlf_(kDefaultMaxLoadFactor) {
+        : groups_(nullptr), slots_(nullptr), slot_size_(0), slot_mask_(static_cast<size_type>(capacity - 1)),
+          slot_threshold_(calc_slot_threshold(kDefaultMaxLoadFactor, capacity)), mlf_(kDefaultMaxLoadFactor)
+#if CLUSTER_USE_SEPARATE_SLOTS
+          , groups_alloc_(nullptr)
+#endif
+    {
         this->reserve(capacity);
     }
 
@@ -434,6 +443,18 @@ public:
     const group_type * groups() const {
         return const_cast<const group_type *>(this->groups_);
     }
+
+#if CLUSTER_USE_SEPARATE_SLOTS
+    group_type * groups_alloc() { return this->groups_alloc_; }
+    const group_type * groups_alloc() const {
+        return const_cast<const group_type *>(this->groups_alloc_);
+    }
+#else
+    group_type * groups_alloc() { return nullptr; }
+    const group_type * groups_alloc() const {
+        return nullptr;
+    }
+#endif
 
     group_type * last_group() {
         return (this->groups() + this->group_capacity());
@@ -1013,12 +1034,10 @@ private:
     }
 
     JSTD_FORCED_INLINE
-    void init_ctrls(ctrl_type * ctrls, size_type ctrl_alloc_capacity) {
-        if (ctrls != this_type::default_empty_ctrls()) {
-            ctrl_type * ctrl = ctrls;
-            assert((ctrl_alloc_capacity % kGroupWidth) == 0);
-            group_type * group = reinterpret_cast<group_type *>(ctrls);
-            group_type * last_group = group + ctrl_alloc_capacity;
+    void init_groups(group_type * groups, size_type group_capacity) {
+        if (groups != this_type::default_empty_groups()) {
+            group_type * group = groups;
+            group_type * last_group = group + group_capacity;
             for (; group < last_group; ++group) {
                 group->init();
             }
@@ -1032,20 +1051,16 @@ private:
     void destroy_data() {
         // Note!!: destroy_slots() need use this->ctrls(), so must destroy slots first.
         this->destroy_slots();
-        this->destroy_ctrls();
+        this->destroy_groups();
     }
 
-    void destroy_ctrls() noexcept {
-        if (this->ctrls_ != this_type::default_empty_ctrls()) {
-            size_type max_ctrl_capacity = this->group_capacity() * kGroupWidth;
+    void destroy_groups() noexcept {
+        if (this->groups_ != this_type::default_empty_groups()) {
+            size_type total_group_alloc_count = this->TotalGroupAllocCount<kGroupAlignment>(this->group_capacity());
 #if CLUSTER_USE_SEPARATE_SLOTS
-            CtrlAllocTraits::deallocate(this->ctrl_allocator_, this->ctrls_, max_ctrl_capacity);
-#else
-            size_type total_alloc_size = this->TotalAllocSize<kSlotAlignment>(
-                                               max_ctrl_capacity, this->slot_capacity());
-            CtrlAllocTraits::deallocate(this->ctrl_allocator_, this->ctrls_, total_alloc_size);
+            GroupAllocTraits::deallocate(this->group_allocator_, this->groups_alloc_, total_group_alloc_count);
+            this->groups_alloc_ = this_type::default_empty_groups();
 #endif
-            this->ctrls_ = this_type::default_empty_ctrls();
             this->groups_ = this_type::default_empty_groups();
         }
     }
@@ -1056,6 +1071,10 @@ private:
         if (this->slots_ != nullptr) {
 #if CLUSTER_USE_SEPARATE_SLOTS
             SlotAllocTraits::deallocate(this->slot_allocator_, this->slots_, this->slot_capacity());
+#else
+            size_type total_slot_alloc_size = this->TotalSlotAllocCount<kGroupAlignment>(
+                                                    this->group_capacity(), this->slot_capacity());
+            SlotAllocTraits::deallocate(this->slot_allocator_, this->slots_, total_slot_alloc_size);
 #endif
             this->slots_ = nullptr;
             this->slot_size_ = 0;
@@ -1070,8 +1089,8 @@ private:
         this->clear_ctrls();
     }
 
-    void clear_ctrls(ctrl_type * ctrls, size_type ctrl_alloc_capacity) {
-        init_ctrls(ctrls, ctrl_alloc_capacity);
+    void clear_groups(group_type * groups, size_type group_capacity) {
+        init_groups(groups, group_capacity);
     }
 
     JSTD_FORCED_INLINE
@@ -1128,41 +1147,72 @@ private:
     }
 
     //
-    // Given the pointer of ctrls and the capacity of ctrl, computes the padding of
-    // between ctrls and slots (from the start of the backing allocation)
-    // and return the beginning of slots.
+    // Given the pointer of actual allocated groups, computes the padding of
+    // first groups (from the start of the backing allocation)
+    // and return the beginning of groups.
     //
-    template <size_type SlotAlignment>
-    inline slot_type * AlignedSlots(const ctrl_type * ctrls, size_type ctrl_capacity) {
-        static_assert((SlotAlignment > 0),
-                      "jstd::cluster_flat_map::AlignedSlots<N>(): SlotAlignment must bigger than 0.");
-        static_assert(((SlotAlignment & (SlotAlignment - 1)) == 0),
-                      "jstd::cluster_flat_map::AlignedSlots<N>(): SlotAlignment must be power of 2.");
-        const ctrl_type * last_ctrls = ctrls + ctrl_capacity;
-        size_type last_ctrl = reinterpret_cast<size_type>(last_ctrls);
-        size_type slots_first = (last_ctrl + SlotAlignment - 1) & (~(SlotAlignment - 1));
-        size_type slots_padding = static_cast<size_type>(slots_first - last_ctrl);
-        slot_type * slots = reinterpret_cast<slot_type *>(
-                                reinterpret_cast<char *>(last_ctrl) + slots_padding);
-        return slots;
+    template <size_type GroupAlignment>
+    inline group_type * AlignedGroups(const group_type * groups_alloc) {
+        static_assert((GroupAlignment > 0),
+                      "jstd::cluster_flat_map::AlignedGroups<N>(): GroupAlignment must bigger than 0.");
+        static_assert(((GroupAlignment & (GroupAlignment - 1)) == 0),
+                      "jstd::cluster_flat_map::AlignedGroups<N>(): GroupAlignment must be power of 2.");
+        size_type groups_start = reinterpret_cast<size_type>(groups_alloc);
+        size_type groups_first = (groups_start + GroupAlignment - 1) & (~(GroupAlignment - 1));
+        size_type groups_padding = static_cast<size_type>(groups_first - groups_start);
+        group_type * groups = reinterpret_cast<group_type *>(
+                                    reinterpret_cast<char *>(groups_start) + groups_padding);
+        return groups;
     }
 
     //
-    // Given the pointer of ctrls, the capacity of a ctrl and slot,
-    // computes the total allocate size of the backing array.
+    // Given the pointer of slots and the capacity of slot, computes the padding of
+    // between slots and groups (from the start of the backing allocation)
+    // and return the beginning of groups.
     //
-    template <size_type SlotAlignment>
-    inline size_type TotalAllocSize(size_type ctrl_capacity, size_type slot_capacity) {
-        const size_type num_ctrl_bytes = ctrl_capacity * sizeof(ctrl_type);
+    template <size_type GroupAlignment>
+    inline group_type * AlignedSlotsAndGroups(const slot_type * slots, size_type slot_capacity) {
+        static_assert((GroupAlignment > 0),
+                      "jstd::cluster_flat_map::AlignedSlotsAndGroups<N>(): GroupAlignment must bigger than 0.");
+        static_assert(((GroupAlignment & (GroupAlignment - 1)) == 0),
+                      "jstd::cluster_flat_map::AlignedSlotsAndGroups<N>(): GroupAlignment must be power of 2.");
+        const slot_type * last_slots = slots + slot_capacity;
+        size_type last_slot = reinterpret_cast<size_type>(last_slots);
+        size_type groups_first = (last_slot + GroupAlignment - 1) & (~(GroupAlignment - 1));
+        size_type groups_padding = static_cast<size_type>(groups_first - last_slot);
+        group_type * groups = reinterpret_cast<group_type *>(
+                                    reinterpret_cast<char *>(last_slot) + groups_padding);
+        return groups;
+    }
+
+    //
+    // Given the pointer of groups, the capacity of a group,
+    // computes the total allocate count of the backing group array.
+    //
+    template <size_type GroupAlignment>
+    inline size_type TotalGroupAllocCount(size_type group_capacity) {
+        const size_type num_group_bytes = group_capacity * sizeof(group_type);
+        const size_type total_bytes = num_group_bytes + GroupAlignment;
+        const size_type total_alloc_count = (total_bytes + sizeof(group_type) - 1) / sizeof(group_type);
+        return total_alloc_count;
+    }
+
+    //
+    // Given the pointer of slots, the capacity of a group and slot,
+    // computes the total allocate count of the backing slot array.
+    //
+    template <size_type GroupAlignment>
+    inline size_type TotalSlotAllocCount(size_type group_capacity, size_type slot_capacity) {
+        const size_type num_group_bytes = group_capacity * sizeof(group_type);
         const size_type num_slot_bytes = slot_capacity * sizeof(slot_type);
-        const size_type total_bytes = num_ctrl_bytes + SlotAlignment + num_slot_bytes;
-        return (total_bytes + sizeof(ctrl_type) - 1) / sizeof(ctrl_type);
+        const size_type total_bytes = num_slot_bytes + GroupAlignment + num_group_bytes;
+        const size_type total_alloc_count = (total_bytes + sizeof(slot_type) - 1) / sizeof(slot_type);
+        return total_alloc_count;
     }
 
     template <bool NeedDestory>
     void reset() noexcept {
         if (!NeedDestory) {
-            this->ctrls_ = this_type::default_empty_ctrls();
             this->groups_ = this_type::default_empty_groups();
             this->slots_ = nullptr;
             this->slot_size_ = 0;
@@ -1200,29 +1250,32 @@ private:
         size_type new_ctrl_capacity = new_capacity;
         size_type new_group_capacity = (new_ctrl_capacity + (kGroupWidth - 1)) / kGroupWidth;
         assert(new_group_capacity > 0);
-        size_type ctrl_alloc_size = new_group_capacity * kGroupWidth;
 
-#if CLUSTER_USE_SEPARATE_SLOTS
-        ctrl_type * new_ctrls = CtrlAllocTraits::allocate(this->ctrl_allocator_, ctrl_alloc_size);
-#else
         size_type new_max_slot_size = new_capacity * this->mlf_ / kLoadFactorAmplify;
-        size_type new_slot_capacity = (!kIsIndirectKV) ? new_ctrl_capacity : new_max_slot_size;
-        size_type total_alloc_size = this->TotalAllocSize<kSlotAlignment>(ctrl_alloc_size, new_slot_capacity);
-
-        ctrl_type * new_ctrls = CtrlAllocTraits::allocate(this->ctrl_allocator_, total_alloc_size);
-#endif
-        // Reset ctrls to default state
-        this->clear_ctrls(new_ctrls, ctrl_alloc_size);
+        size_type new_slot_capacity = (!kIsIndirectKV) ? new_capacity : new_max_slot_size;
 
 #if CLUSTER_USE_SEPARATE_SLOTS
-        slot_type * new_slots = SlotAllocTraits::allocate(this->slot_allocator_, new_ctrl_capacity);
-#else
-        slot_type * new_slots = this->AlignedSlots<kSlotAlignment>(new_ctrls, new_ctrl_capacity);
-#endif
-        this->ctrls_ = new_ctrls;
-        this->groups_ = reinterpret_cast<group_type *>(new_ctrls);
+        size_type total_group_alloc_count = this->TotalGroupAllocCount<kGroupAlignment>(new_group_capacity);
+        group_type * new_groups_alloc = GroupAllocTraits::allocate(this->group_allocator_, total_group_alloc_count);
+        group_type * new_groups = this->AlignedGroups<kGroupAlignment>(new_groups_alloc);
 
+        slot_type * new_slots = SlotAllocTraits::allocate(this->slot_allocator_, new_slot_capacity);
+#else
+        size_type total_slot_alloc_count = this->TotalSlotAllocCount<kGroupAlignment>(new_group_capacity, new_slot_capacity);
+
+        slot_type * new_slots = SlotAllocTraits::allocate(this->slot_allocator_, total_slot_alloc_count);
+        group_type * new_groups = this->AlignedSlotsAndGroups<kGroupAlignment>(new_slots, new_slot_capacity);
+#endif
+
+        // Reset groups to default state
+        this->clear_groups(new_groups, new_group_capacity);
+
+        this->groups_ = new_groups;
         this->slots_ = new_slots;
+#if CLUSTER_USE_SEPARATE_SLOTS
+        this->groups_alloc_ = new_groups_alloc;
+#endif
+
         if (isInitialize) {
             assert(this->slot_size_ == 0);
         } else {
@@ -1246,6 +1299,7 @@ private:
 
             ctrl_type * old_ctrls = this->ctrls();
             group_type * old_groups = this->groups();
+            group_type * old_groups_alloc = this->groups_alloc();
             size_type old_group_capacity = this->group_capacity();
 
             slot_type * old_slots = this->slots();
@@ -1277,20 +1331,20 @@ private:
 
             assert(this->slot_size() == old_slot_size);
 
+#if CLUSTER_USE_SEPARATE_SLOTS
             if (old_groups != this_type::default_empty_groups()) {
-                size_type old_alloc_ctrl_capacity = old_group_capacity * kGroupWidth;
-#if CLUSTER_USE_SEPARATE_SLOTS
-                CtrlAllocTraits::deallocate(this->ctrl_allocator_, old_ctrls, old_alloc_ctrl_capacity);
-#else
-                size_type total_alloc_size = this->TotalAllocSize<kSlotAlignment>(
-                                                   old_alloc_ctrl_capacity, old_slot_capacity);
-                CtrlAllocTraits::deallocate(this->ctrl_allocator_, old_ctrls, total_alloc_size);
-#endif
+                assert(old_groups_alloc != nullptr);
+                size_type total_group_alloc_count = this->TotalGroupAllocCount<kGroupAlignment>(old_group_capacity);
+                GroupAllocTraits::deallocate(this->group_allocator_, old_groups_alloc, total_group_alloc_count);
             }
-
-#if CLUSTER_USE_SEPARATE_SLOTS
             if (old_slots != nullptr) {
                 SlotAllocTraits::deallocate(this->slot_allocator_, old_slots, old_slot_capacity);
+            }
+#else
+            if (old_slots != nullptr) {
+                size_type total_slot_alloc_count = this->TotalSlotAllocCount<kGroupAlignment>(
+                                                        old_group_capacity, old_slot_capacity);
+                SlotAllocTraits::deallocate(this->slot_allocator_, old_slots, total_slot_alloc_count);
             }
 #endif
         }
