@@ -509,8 +509,12 @@ public:
     // Effectively calls rehash(std::ceil(new_capacity / max_load_factor())).
     //
     void reserve(size_type new_capacity) {
-        new_capacity = this->shrink_to_fit_capacity(new_capacity);
-        this->rehash_impl<false>(new_capacity);
+        if (likely(new_capacity != 0)) {
+            new_capacity = this->shrink_to_fit_capacity(new_capacity);
+            this->rehash_impl<false>(new_capacity);
+        } else {
+            this->reset<false>();
+        }
     }
 
     //
@@ -527,12 +531,12 @@ public:
         this->rehash_impl<false>(new_capacity);
     }
 
-    void shrink_to_fit(bool read_only = true) {
+    void shrink_to_fit(bool read_only = false) {
         size_type new_capacity;
-        if (read_only)
-            new_capacity = this->slot_size();
-        else
+        if (likely(!read_only))
             new_capacity = this->shrink_to_fit_capacity(this->slot_size());
+        else
+            new_capacity = this->slot_size();
         this->rehash_impl<true>(new_capacity);
     }
 
@@ -575,7 +579,7 @@ public:
     ///
     /// Modifiers
     ///
-    void clear(bool need_destroy = true) noexcept {
+    void clear(bool need_destroy = false) noexcept {
         if (need_destroy) {
             this->create_slots<false>(kDefaultCapacity);
             assert(this->slot_size() == 0);
@@ -817,7 +821,7 @@ private:
     }
 
     bool is_positive(size_type value) const {
-        return (reinterpret_cast<intptr_t>(value) >= 0);
+        return (static_cast<intptr_t>(value) >= 0);
     }
 
     inline iterator iterator_at(size_type index) noexcept {
@@ -1218,6 +1222,7 @@ private:
             this->slot_size_ = 0;
             this->slot_mask_ = 0;
             this->slot_threshold_ = 0;
+            this->groups_alloc_ = this_type::default_empty_groups();
         } else {
             this->destroy_data();
         }
@@ -1997,7 +2002,7 @@ private:
 
     template <typename KeyT>
     JSTD_NO_INLINE
-    std::pair<slot_type *, bool>
+    std::pair<size_type, bool>
     find_and_insert(const KeyT & key) {
         std::size_t hash_code = this->hash_for(key);
         size_type slot_pos = this->index_for_hash(hash_code);
@@ -2005,8 +2010,7 @@ private:
 
         size_type slot_index = this->find_index(key, slot_pos, ctrl_hash);
         if (slot_index != this->slot_capacity()) {
-            slot_type * slot = this->slot_at(slot_index);
-            return { slot, kIsExists };
+            return { slot_index, kIsExists };
         }
 
         if (this->need_grow()) {
@@ -2019,8 +2023,7 @@ private:
         }
 
         slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
-        slot_type * slot = this->slot_at(slot_index);
-        return { slot, kIsNotExists };
+        return { slot_index, kIsNotExists };
     }
 
     ///
@@ -2029,7 +2032,8 @@ private:
     JSTD_FORCED_INLINE
     void insert_unique_and_no_grow(slot_type * old_slot) {
         assert(old_slot != nullptr);
-        slot_type * new_slot = this->insert_unique_and_no_grow(old_slot->value.first);
+        size_type slot_index = this->insert_unique_and_no_grow(old_slot->value.first);
+        slot_type * new_slot = this->slot_at(slot_index);
         assert(new_slot != nullptr);
 
         SlotPolicyTraits::construct(&this->allocator_, new_slot, old_slot);
@@ -2039,42 +2043,44 @@ private:
 
     template <typename KeyT>
     JSTD_FORCED_INLINE
-    slot_type * insert_unique_and_no_grow(const KeyT & key) {
+    size_type insert_unique_and_no_grow(const KeyT & key) {
         std::size_t hash_code = this->hash_for(key);
         size_type slot_pos = this->index_for_hash(hash_code);
         std::uint8_t ctrl_hash = this->ctrl_for_hash(hash_code);
 
         size_type slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
-        slot_type * slot = this->slot_at(slot_index);
-        return slot;
+        return slot_index;
     }
 
     template <bool AlwaysUpdate>
     std::pair<iterator, bool> emplace_impl(const init_type & value) {
         auto find_info = this->find_and_insert(value.first);
-        slot_type * slot = find_info.first;
-        bool is_exists = find_info.second;
+        size_type slot_index = find_info.first;
+        bool is_exists = find_info.second;        
         if (!is_exists) {
             // The key to be inserted is not exists.
+            slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot, value);
             this->slot_size_++;
         } else {
             // The key to be inserted already exists.
             if (AlwaysUpdate) {
+                slot_type * slot = this->slot_at(slot_index);
                 slot->value.second = value.second;
             }
         }
-        return { this->iterator_at(slot), is_exists };
+        return { this->iterator_at(slot_index), is_exists };
     }
 
     template <bool AlwaysUpdate>
     std::pair<iterator, bool> emplace_impl(init_type && value) {
         auto find_info = this->find_and_insert(value.first);
-        slot_type * slot = find_info.first;
+        size_type slot_index = find_info.first;
         bool is_exists = find_info.second;
         if (!is_exists) {
             // The key to be inserted is not exists.
+            slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot, std::forward<init_type>(value));
             this->slot_size_++;
@@ -2082,22 +2088,24 @@ private:
             // The key to be inserted already exists.
             if (AlwaysUpdate) {
                 static constexpr bool is_rvalue_ref = std::is_rvalue_reference<decltype(value)>::value;
+                slot_type * slot = this->slot_at(slot_index);
                 if (is_rvalue_ref)
                     slot->value.second = std::move(value.second);
                 else
                     slot->value.second = value.second;
             }
         }
-        return { this->iterator_at(slot), is_exists };
+        return { this->iterator_at(slot_index), is_exists };
     }
 
     template <bool AlwaysUpdate, typename KeyT, typename MappedT>
     std::pair<iterator, bool> emplace_impl(KeyT && key, MappedT && value) {
         auto find_info = this->find_and_insert(key);
-        slot_type * slot = find_info.first;
+        size_type slot_index = find_info.first;
         bool is_exists = find_info.second;
         if (!is_exists) {
             // The key to be inserted is not exists.
+            slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot,
                                         std::forward<KeyT>(key),
@@ -2107,6 +2115,7 @@ private:
             // The key to be inserted already exists.
             static constexpr bool isMappedType = jstd::is_same_ex<MappedT, mapped_type>::value;
             if (AlwaysUpdate) {
+                slot_type * slot = this->slot_at(slot_index);
                 if (isMappedType) {
                     slot->value.second = std::forward<MappedT>(value);
                 } else {
@@ -2115,16 +2124,17 @@ private:
                 }
             }
         }
-        return { this->iterator_at(slot), is_exists };
+        return { this->iterator_at(slot_index), is_exists };
     }
 
     template <bool AlwaysUpdate, typename KeyT, typename ... Args>
     std::pair<iterator, bool> emplace_impl(KeyT && key, Args && ... args) {
         auto find_info = this->find_and_insert(key);
-        slot_type * slot = find_info.first;
+        size_type slot_index = find_info.first;
         bool is_exists = find_info.second;
         if (!is_exists) {
             // The key to be inserted is not exists.
+            slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot,
                                         std::piecewise_construct,
@@ -2134,11 +2144,12 @@ private:
         } else {
             // The key to be inserted already exists.
             if (AlwaysUpdate) {
+                slot_type * slot = this->slot_at(slot_index);
                 mapped_type mapped_value(std::forward<Args>(args)...);
                 slot->value.second = std::move(mapped_value);
             }
         }
-        return { this->iterator_at(slot), is_exists };
+        return { this->iterator_at(slot_index), is_exists };
     }
 
     template <bool AlwaysUpdate, typename PieceWise,
@@ -2148,10 +2159,11 @@ private:
                                            std::tuple<Ts2...> && second) {
         tuple_wrapper2<key_type> key_wrapper(first);
         auto find_info = this->find_and_insert(key_wrapper.value());
-        slot_type * slot = find_info.first;
+        size_type slot_index = find_info.first;
         bool is_exists = find_info.second;
         if (!is_exists) {
             // The key to be inserted is not exists.
+            slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot,
                                         std::piecewise_construct,
@@ -2165,7 +2177,7 @@ private:
                 slot->value.second = std::move(mapped_wrapper.value());
             }
         }
-        return { this->iterator_at(slot), is_exists };
+        return { this->iterator_at(slot_index), is_exists };
     }
 
     template <bool AlwaysUpdate, typename First, typename std::enable_if<
@@ -2186,10 +2198,11 @@ private:
                                     std::forward<Args>(args)...);
 
         auto find_info = this->find_and_insert(tmp_slot->value.first);
-        slot_type * slot = find_info.first;
+        size_type slot_index = find_info.first;
         bool is_exists = find_info.second;
         if (!is_exists) {
             // The key to be inserted is not exists.
+            slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
 
             SlotPolicyTraits::transfer(&this->allocator_, slot, tmp_slot);
@@ -2197,11 +2210,12 @@ private:
         } else {
             // The key to be inserted already exists.
             if (AlwaysUpdate) {
+                slot_type * slot = this->slot_at(slot_index);
                 slot->value.second = std::move(tmp_slot->value.second);
             }
-            SlotPolicyTraits::destroy(&this->allocator_, tmp_slot);
         }
-        return { this->iterator_at(slot), is_exists };
+        SlotPolicyTraits::destroy(&this->allocator_, tmp_slot);
+        return { this->iterator_at(slot_index), is_exists };
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////
@@ -2209,10 +2223,11 @@ private:
     template <typename KeyT, typename ... Args>
     std::pair<iterator, bool> try_emplace_impl(const KeyT & key, Args && ... args) {
         auto find_info = this->find_and_insert(key);
-        slot_type * slot = find_info.first;
-        bool is_exists = find_info.second;
+        size_type slot_index = find_info.first;
+        bool is_exists = find_info.second;        
         if (!is_exists) {
             // The key to be inserted is not exists.
+            slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot,
                                         std::piecewise_construct,
@@ -2220,16 +2235,17 @@ private:
                                         std::forward_as_tuple(std::forward<Args>(args)...));
             this->slot_size_++;
         }
-        return { this->iterator_at(slot), is_exists };
+        return { this->iterator_at(slot_index), is_exists };
     }
 
     template <typename KeyT, typename ... Args>
     std::pair<iterator, bool> try_emplace_impl(KeyT && key, Args && ... args) {
         auto find_info = this->find_and_insert(key);
-        slot_type * slot = find_info.first;
+        size_type slot_index = find_info.first;
         bool is_exists = find_info.second;
         if (!is_exists) {
             // The key to be inserted is not exists.
+            slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
             SlotPolicyTraits::construct(&this->allocator_, slot,
                                         std::piecewise_construct,
@@ -2237,7 +2253,7 @@ private:
                                         std::forward_as_tuple(std::forward<Args>(args)...));
             this->slot_size_++;
         }
-        return { this->iterator_at(slot), is_exists };
+        return { this->iterator_at(slot_index), is_exists };
     }
 };
 

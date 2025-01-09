@@ -300,7 +300,7 @@ public:
         table_.resize(new_capacity);
     }
 
-    void shrink_to_fit(bool read_only = true) {
+    void shrink_to_fit(bool read_only = false) {
         table_.shrink_to_fit(read_only);
     }
 
@@ -339,7 +339,7 @@ public:
     ///
     /// Modifiers
     ///
-    void clear(bool need_destroy = true) noexcept {
+    void clear(bool need_destroy = false) noexcept {
         table_.clear(need_destroy);
     }
 
