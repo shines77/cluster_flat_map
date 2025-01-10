@@ -710,6 +710,46 @@ public:
     }
 
     ///
+    /// erase(key)
+    ///
+    JSTD_FORCED_INLINE
+    size_type erase(const key_type & key) {
+        size_type num_deleted = this->find_and_erase(key);
+        return num_deleted;
+    }
+
+    JSTD_FORCED_INLINE
+    iterator erase(iterator pos) {
+        size_type slot_index = pos.index();
+        this->erase_index(slot_index);
+        ctrl_type * ctrl = this->ctrl_at(slot_index);
+        return this->next_valid_iterator(ctrl, pos);
+    }
+
+    JSTD_FORCED_INLINE
+    iterator erase(const_iterator pos) {
+        return this->erase(iterator(pos));
+    }
+
+    iterator erase(const_iterator first, const_iterator last) {
+        for (; first != last; ++first) {
+            this->erase(first);
+        }
+        return { last };
+    }
+
+    template <typename InputIter, typename std::enable_if<
+              !jstd::is_same_ex<InputIter, iterator      >::value &&
+              !jstd::is_same_ex<InputIter, const_iterator>::value>::type * = nullptr>
+    size_type erase(InputIter first, InputIter last) {
+        size_type num_deleted = 0;
+        for (; first != last; ++first) {
+            num_deleted += static_cast<size_type>(this->erase(*first));
+        }
+        return num_deleted;
+    }
+
+    ///
     /// For iterator
     ///
     inline size_type next_index(size_type index) const noexcept {
@@ -734,8 +774,8 @@ public:
 
     inline group_type * group_at(size_type slot_index) noexcept {
         assert(slot_index <= this->slot_capacity());
-        size_type group_idx = slot_index / kGroupWidth;
-        return (this->groups() + std::ptrdiff_t(group_idx));
+        size_type group_index = slot_index / kGroupWidth;
+        return (this->groups() + std::ptrdiff_t(group_index));
     }
 
     inline const group_type * group_at(size_type slot_index) const noexcept {
@@ -873,11 +913,11 @@ private:
             return ++iter;
     }
 
-    inline const_iterator next_valid_iterator(ctrl_type * ctrl, const_iterator iter) {
+    inline iterator next_valid_iterator(ctrl_type * ctrl, const_iterator iter) {
         if (ctrl->is_used())
             return iter;
         else
-            return ++iter;
+            return iterator(++iter);
     }
 
     inline iterator next_valid_iterator(iterator iter) {
@@ -891,14 +931,14 @@ private:
         }
     }
 
-    inline const_iterator next_valid_iterator(const_iterator iter) {
+    inline iterator next_valid_iterator(const_iterator iter) {
         size_type index = this->index_of(iter);
         if (!kIsIndirectKV) {
             ctrl_type * ctrl = this->ctrl_at(index);
             return this->next_valid_iterator(ctrl, iter);
         } else {
             ++iter;
-            return iter;
+            return iterator(iter);
         }
     }
 
@@ -1359,20 +1399,14 @@ private:
     }
 
     JSTD_FORCED_INLINE
+    void construct_slot(slot_type * slot) {
+        SlotPolicyTraits::construct(&this->slot_allocator_, slot);
+    }
+
+    JSTD_FORCED_INLINE
     void construct_slot(size_type index) {
         slot_type * slot = this->slot_at(index);
         this->construct_slot(slot);
-    }
-
-    JSTD_FORCED_INLINE
-    void construct_slot(slot_type * slot) {
-        SlotPolicyTraits::construct(&this->allocator_, slot);
-    }
-
-    JSTD_FORCED_INLINE
-    void destroy_slot(size_type index) {
-        slot_type * slot = this->slot_at(index);
-        this->destroy_slot(slot);
     }
 
     JSTD_FORCED_INLINE
@@ -1383,10 +1417,23 @@ private:
     }
 
     JSTD_FORCED_INLINE
+    void destroy_slot(size_type index) {
+        slot_type * slot = this->slot_at(index);
+        this->destroy_slot(slot);
+    }
+
+    JSTD_FORCED_INLINE
     void destroy_slot_data(ctrl_type * ctrl, slot_type * slot) {
         assert(ctrl->is_used());
         ctrl->set_empty();
         this->destroy_slot(slot);
+    }
+
+    JSTD_FORCED_INLINE
+    void destroy_slot_data(size_type index) {
+        ctrl_type * ctrl = this->ctrl_at(index);
+        slot_type * slot = this->slot_at(index);
+        this->destroy_slot_data(ctrl, slot);
     }
 
     JSTD_FORCED_INLINE
@@ -2257,6 +2304,41 @@ private:
             this->slot_size_++;
         }
         return { this->iterator_at(slot_index), is_exists };
+    }
+
+    JSTD_FORCED_INLINE
+    bool ctrl_is_last_bit(size_type slot_index) {
+        group_type * group = this->groups() + slot_index / kGroupWidth;
+        size_type ctrl_pos = slot_index % kGroupWidth;
+        std::uint32_t used_mask = group->match_used();
+        std::uint32_t last_bit_pos = BitUtils::bsr32(used_mask);
+        return (ctrl_pos == static_cast<size_type>(last_bit_pos));
+    }
+
+    JSTD_FORCED_INLINE
+    void erase_index(size_type slot_index) {
+        assert(slot_index >= 0 && slot_index < this>slot_capacity());
+        bool is_last_bit = this->ctrl_is_last_bit(slot_index);
+        if (likely(!is_last_bit)) {
+            assert(this->slot_size_ > 0);
+            this->slot_size_--;
+            assert(this->slot_threshold_ > 0);
+            this->slot_threshold_--;
+        }  
+        this->destroy_slot_data(slot_index);      
+    }
+
+    JSTD_FORCED_INLINE
+    size_type find_and_erase(const key_type & key) {
+        std::size_t hash_code = this->hash_for(key);
+        size_type slot_pos = this->index_for_hash(hash_code);
+        std::uint8_t ctrl_hash = this->ctrl_for_hash(hash_code);
+
+        size_type slot_index = this->find_index(key, slot_pos, ctrl_hash);
+        if (slot_index != this->slot_capacity()) {
+            this->erase_index(slot_index);
+        }
+        return (slot_index != this->slot_capacity()) ? 1 : 0;
     }
 };
 

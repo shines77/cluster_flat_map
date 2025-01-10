@@ -426,6 +426,32 @@ public:
     std::pair<iterator, bool> try_emplace(const_iterator hint, KeyT && key, Args && ... args) {
         return table_.try_emplace(hint, std::forward<KeyT>(key), std::forward<Args>(args)...);
     }
+
+    ///
+    /// erase(key)
+    ///
+    size_type erase(const key_type & key) {
+        return table_.erase(key);
+    }
+
+    size_type erase(iterator pos) {
+        return table_.erase(pos);
+    }
+
+    size_type erase(const_iterator pos) {
+        return table_.erase(pos);
+    }
+
+    iterator erase(const_iterator first, const_iterator last) {
+        return table_.erase(first, last);
+    }
+
+    template <typename InputIter, typename std::enable_if<
+              !jstd::is_same_ex<InputIter, iterator      >::value &&
+              !jstd::is_same_ex<InputIter, const_iterator>::value>::type * = nullptr>
+    iterator erase(InputIter first, InputIter last) {
+        return table_.erase(first, last);
+    }
 };
 
 } // namespace jstd
