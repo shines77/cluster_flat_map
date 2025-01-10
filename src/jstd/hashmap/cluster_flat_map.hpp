@@ -430,27 +430,39 @@ public:
     ///
     /// erase(key)
     ///
+    JSTD_FORCED_INLINE
     size_type erase(const key_type & key) {
         return table_.erase(key);
     }
 
+    JSTD_FORCED_INLINE
     size_type erase(iterator pos) {
         return table_.erase(pos);
     }
 
+    JSTD_FORCED_INLINE
     size_type erase(const_iterator pos) {
         return table_.erase(pos);
     }
 
+    JSTD_FORCED_INLINE
     iterator erase(const_iterator first, const_iterator last) {
-        return table_.erase(first, last);
+        for (; first != last; ++first) {
+            this->erase(first);
+        }
+        return { last };
     }
 
     template <typename InputIter, typename std::enable_if<
               !jstd::is_same_ex<InputIter, iterator      >::value &&
               !jstd::is_same_ex<InputIter, const_iterator>::value>::type * = nullptr>
+    JSTD_FORCED_INLINE
     iterator erase(InputIter first, InputIter last) {
-        return table_.erase(first, last);
+        size_type num_deleted = 0;
+        for (; first != last; ++first) {
+            num_deleted += static_cast<size_type>(this->erase(*first));
+        }
+        return num_deleted;
     }
 };
 

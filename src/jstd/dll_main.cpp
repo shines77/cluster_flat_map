@@ -50,5 +50,13 @@ int main()
     printf("string_hash_map.size() = %d\n", (int)string_hash_map.size());
     printf("string_hash_map.max_load_factor() = %0.3f\n", string_hash_map.max_load_factor());
 
+    string_hash_map.erase("abc");
+
+    printf("string_hash_map.size() = %d\n", (int)string_hash_map.size());
+
+    string_hash_map.erase(std::string("abc"));
+
+    printf("string_hash_map.size() = %d\n", (int)string_hash_map.size());
+
     return 0;
 }

@@ -731,24 +731,6 @@ public:
         return this->erase(iterator(pos));
     }
 
-    iterator erase(const_iterator first, const_iterator last) {
-        for (; first != last; ++first) {
-            this->erase(first);
-        }
-        return { last };
-    }
-
-    template <typename InputIter, typename std::enable_if<
-              !jstd::is_same_ex<InputIter, iterator      >::value &&
-              !jstd::is_same_ex<InputIter, const_iterator>::value>::type * = nullptr>
-    size_type erase(InputIter first, InputIter last) {
-        size_type num_deleted = 0;
-        for (; first != last; ++first) {
-            num_deleted += static_cast<size_type>(this->erase(*first));
-        }
-        return num_deleted;
-    }
-
     ///
     /// For iterator
     ///
@@ -2317,15 +2299,15 @@ private:
 
     JSTD_FORCED_INLINE
     void erase_index(size_type slot_index) {
-        assert(slot_index >= 0 && slot_index < this>slot_capacity());
+        assert(slot_index >= 0 && slot_index < this->slot_capacity());
         bool is_last_bit = this->ctrl_is_last_bit(slot_index);
         if (likely(!is_last_bit)) {
-            assert(this->slot_size_ > 0);
-            this->slot_size_--;
             assert(this->slot_threshold_ > 0);
             this->slot_threshold_--;
-        }  
-        this->destroy_slot_data(slot_index);      
+        }
+        assert(this->slot_size_ > 0);
+        this->slot_size_--;
+        this->destroy_slot_data(slot_index);
     }
 
     JSTD_FORCED_INLINE
