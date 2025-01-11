@@ -345,11 +345,11 @@ public:
     ///
     /// insert(value)
     ///
-    std::pair<iterator, bool> insert(const value_type & value) {
+    std::pair<iterator, bool> insert(const init_type & value) {
         return table_.emplace(value);
     }
 
-    std::pair<iterator, bool> insert(value_type && value) {
+    std::pair<iterator, bool> insert(init_type && value) {
         return table_.emplace(std::move(value));
     }
 
@@ -358,11 +358,11 @@ public:
         return table_.emplace(std::forward<P>(value));
     }
 
-    iterator insert(const_iterator hint, const value_type & value) {
+    iterator insert(const_iterator hint, const init_type & value) {
         return table_.emplace(hint, value);
     }
 
-    iterator insert(const_iterator hint, value_type && value) {
+    iterator insert(const_iterator hint, init_type && value) {
         return table_.emplace(hint, std::move(value));
     }
 

@@ -595,11 +595,11 @@ public:
     ///
     /// insert(value)
     ///
-    std::pair<iterator, bool> insert(const value_type & value) {
+    std::pair<iterator, bool> insert(const init_type & value) {
         return this->emplace_impl<false>(value);
     }
 
-    std::pair<iterator, bool> insert(value_type && value) {
+    std::pair<iterator, bool> insert(init_type && value) {
         return this->emplace_impl<false>(std::move(value));
     }
 
@@ -608,11 +608,11 @@ public:
         return this->emplace_impl<false>(std::forward<P>(value));
     }
 
-    iterator insert(const_iterator hint, const value_type & value) {
+    iterator insert(const_iterator hint, const init_type & value) {
         return this->emplace_impl<false>(value).first;
     }
 
-    iterator insert(const_iterator hint, value_type && value) {
+    iterator insert(const_iterator hint, init_type && value) {
         return this->emplace_impl<false>(std::move(value)).first;
     }
 
@@ -1466,10 +1466,11 @@ private:
             // Last 4 items use ctrl seek, maybe faster.
             static const size_type kCtrlFasterSeekPos = 4;
             if (likely(slot_pos < (kGroupWidth - kCtrlFasterSeekPos))) {
-                // Filter out the bits in the leading position
-                std::uint32_t non_excluded_mask = ~((std::uint32_t(1) << std::uint32_t(slot_pos)) - 1);
                 if (group < last_group) {
                     std::uint32_t used_mask = group->match_used();
+                    // Filter out the bits in the leading position
+                    // std::uint32_t non_excluded_mask = ~((std::uint32_t(1) << std::uint32_t(slot_pos)) - 1);
+                    std::uint32_t non_excluded_mask = (std::uint32_t(0xFFFFFFFFu) << std::uint32_t(slot_pos));
                     used_mask &= non_excluded_mask;
                     if (likely(used_mask != 0)) {
                         std::uint32_t used_pos = BitUtils::bsf32(used_mask);
@@ -1550,9 +1551,11 @@ private:
                 group = this->groups();
                 slot_base = 0;
             }
+#if 0
             if (unlikely(group == first_group)) {
                 return this->last_slot();
             }
+#endif
 #if CLUSTER_DISPLAY_DEBUG_INFO
             skip_groups++;
             if (unlikely(skip_groups > kSkipGroupsLimit)) {
@@ -1615,9 +1618,11 @@ private:
                 group = this->groups();
                 slot_base = 0;
             }
+#if 0
             if (unlikely(group == first_group)) {
                 return this->slot_capacity();
             }
+#endif
 #if CLUSTER_DISPLAY_DEBUG_INFO
             skip_groups++;
             if (unlikely(skip_groups > kSkipGroupsLimit)) {
@@ -1678,9 +1683,11 @@ private:
                 group = this->groups();
                 slot_base = 0;
             }
+#if 0
             if (unlikely(group == first_group)) {
                 return this->slot_capacity();
             }
+#endif
 #if CLUSTER_DISPLAY_DEBUG_INFO
             skip_groups++;
             if (unlikely(skip_groups > kSkipGroupsLimit)) {
@@ -1779,7 +1786,7 @@ private:
             slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
             assert(slot_index < this->slot_capacity());
-            SlotPolicyTraits::construct(&this->slot_allocator_, slot, std::forward<init_type>(value));
+            SlotPolicyTraits::construct(&this->slot_allocator_, slot, std::move(value));
             this->slot_size_++;
         } else {
             // The key to be inserted already exists.
