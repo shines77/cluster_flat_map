@@ -12,11 +12,11 @@ if (NOT MSVC)
     # For gcc or clang warning setting
     target_compile_options(cardinal_bench
         PUBLIC
-            -std=c++17 -march=native -mtune=native -O3 -DNDEBUG -finput-charset=utf-8 -fPIC -fpic -Wall -Wno-unused-function -Wno-deprecated-declarations -Wno-unused-variable -Wno-deprecated
+            -Wall -Wno-unused-function -Wno-deprecated-declarations -Wno-unused-variable -Wno-deprecated
     )
 else()
     # Warning level 3 and all warnings as errors
-    target_compile_options(cardinal_bench PUBLIC -O2 -DNDEBUG /W3 /WX)
+    target_compile_options(cardinal_bench PUBLIC /W3 /WX)
 endif()
 
 target_link_libraries(cardinal_bench
