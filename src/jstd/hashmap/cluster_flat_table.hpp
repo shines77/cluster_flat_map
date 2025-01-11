@@ -949,7 +949,7 @@ private:
 #elif defined(__GNUC__) || (defined(__clang__) && !defined(_MSC_VER))
         std::size_t hash_code;
         if (std::is_integral<key_type>::value)
-            hash_code = hashes::fnv_1a((const unsigned char *)&value, sizeof(key_type));
+            hash_code = hashes::fnv_1a((const unsigned char *)&key, sizeof(key_type));
         else
             hash_code = static_cast<std::size_t>(this->hasher_(key));
 #else
