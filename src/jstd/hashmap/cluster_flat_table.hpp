@@ -1645,6 +1645,7 @@ private:
         group_type * first_group = group;
         group_type * last_group = this->last_group();
 
+        group_type * prev_group = nullptr;
         size_type skip_groups = 0;
         size_type slot_base = group_index * kGroupWidth;
 
@@ -1663,12 +1664,7 @@ private:
                 }
             }
 #if CLUSTER_DISPLAY_DEBUG_INFO
-            if (unlikely(skip_groups > kSkipGroupsLimit)) {
-                std::cout << "find_first_empty_to_insert(): key = " << key <<
-                             ", skip_groups = " << skip_groups <<
-                             ", load_factor = " << this->load_factor() << std::endl;
-                display_meta_datas(group);
-            }
+            prev_group = group;
 #endif
             slot_base += kGroupWidth;
             group++;
@@ -1685,6 +1681,7 @@ private:
                 std::cout << "find_first_empty_to_insert(): key = " << key <<
                              ", skip_groups = " << skip_groups <<
                              ", load_factor = " << this->load_factor() << std::endl;
+                display_meta_datas(prev_group);
             }
 #endif
         }
