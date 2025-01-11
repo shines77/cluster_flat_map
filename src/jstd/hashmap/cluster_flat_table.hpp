@@ -942,12 +942,18 @@ private:
 
     inline std::size_t hash_for(const key_type & key) const
         noexcept(noexcept(this->hasher_(key))) {
-#if 1
-        std::size_t hash_code = static_cast<std::size_t>(this->hasher_(key));
-#else
+#if CLUSTER_USE_HASH_POLICY
         std::size_t hash_code = static_cast<std::size_t>(
             this->hash_policy_.get_hash_code(key)
         );
+#elif defined(__GNUC__) || (defined(__clang__) && !defined(_MSC_VER))
+        std::size_t hash_code;
+        if (std::is_integral<key_type>::value)
+            hash_code = hashes::fnv_1a((const unsigned char *)&value, sizeof(key_type));
+        else
+            hash_code = static_cast<std::size_t>(this->hasher_(key));
+#else
+        std::size_t hash_code = static_cast<std::size_t>(this->hasher_(key));
 #endif
         return hash_code;
     }
@@ -956,14 +962,7 @@ private:
     // Do the index hash on the basis of hash code for the index_for_hash().
     //
     inline std::size_t index_hasher(std::size_t value) const noexcept {
-#if defined(__GNUC__) || (defined(__clang__) && !defined(_MSC_VER))
-        if (std::is_integral<key_type>::value)
-            return (std::size_t)hashes::mum_hash64((std::uint64_t)value, 11400714819323198485ull);
-        else
-            return value;
-#else
         return value;
-#endif
     }
 
     //
