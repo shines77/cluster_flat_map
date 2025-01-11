@@ -637,7 +637,7 @@ std::size_t mum_hash(std::size_t multiplicand, std::size_t multiplier)
 }
 
 static inline
-std::size_t fnv_1a(const unsigned char * first, std::size_t count)
+std::size_t msvc_fnv_1a(const unsigned char * first, std::size_t count)
 {
 #if (JSTD_IS_X86_64 != 0) || (JSTD_IS_ARM64 != 0)
     static_assert(sizeof(size_t) == 8, "This code is for 64-bit size_t.");
@@ -650,9 +650,25 @@ std::size_t fnv_1a(const unsigned char * first, std::size_t count)
 #endif /* defined(_ARCH64) */
 
     std::size_t value = FNV_offset_basis;
-    for (std::size_t next = 0; next < count; ++next) {
-        value ^= (std::size_t)first[next];
-        value *= FNV_prime;
+    if (count == 8) {
+        const unsigned int * dword = (const unsigned int *)first;
+        count /= sizeof(unsigned int);
+        for (std::size_t next = 0; next < count; ++next) {
+            value ^= (std::size_t)dword[next];
+            value *= FNV_prime;
+        }
+    } else if (count == 4) {
+        const unsigned short * word = (const unsigned short *)first;
+        count /= sizeof(unsigned short);
+        for (std::size_t next = 0; next < count; ++next) {
+            value ^= (std::size_t)word[next];
+            value *= FNV_prime;
+        }
+    } else {
+        for (std::size_t next = 0; next < count; ++next) {
+            value ^= (std::size_t)first[next];
+            value *= FNV_prime;
+        }
     }
     return value;
 }
