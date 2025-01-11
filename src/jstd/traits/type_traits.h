@@ -321,6 +321,13 @@ struct is_noexcept_move_assignable {
 		   !std::is_copy_assignable<T>::value);
 };
 
+template <typename Hash, typename Key>
+struct is_default_std_hash {
+    typedef typename std::remove_const<Key>::type key_type;
+
+    static constexpr bool value = std::is_same<Hash, std::hash<key_type>>::value;
+};
+
 //////////////////////////////////////////////////////////////////////////////////
 
 struct if_constexpr_void_else {
