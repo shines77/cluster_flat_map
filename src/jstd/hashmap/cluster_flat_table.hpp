@@ -374,7 +374,7 @@ public:
     size_type size() const noexcept { return this->slot_size(); }
     size_type capacity() const noexcept { return this->slot_capacity(); }
     size_type max_size() const noexcept {
-        return std::numeric_limits<difference_type>::(max)() / sizeof(value_type);
+        return (std::numeric_limits<difference_type>::max)() / sizeof(value_type);
     }
 
     size_type slot_size() const { return this->slot_size_; }
@@ -398,7 +398,7 @@ public:
     size_type bucket_size(size_type n) const noexcept { return 1; }
     size_type bucket_count() const noexcept { return this->slot_capacity(); }
     size_type max_bucket_count() const noexcept {
-        return std::numeric_limits<difference_type>::(max)() / sizeof(ctrl_type);
+        return (std::numeric_limits<difference_type>::max)() / sizeof(ctrl_type);
     }
 
     size_type bucket(const key_type & key) const {
