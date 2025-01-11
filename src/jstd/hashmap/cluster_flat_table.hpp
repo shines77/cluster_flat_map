@@ -936,6 +936,16 @@ private:
         }
     }
 
+    template <typename KeyT, typename std::enable_if<!std::is_integral<KeyT>::value>::type * = nullptr>
+    constexpr const bool is_gcc_integral_std_hash(const KeyT & key) const {
+        return false;
+    }
+
+    template <typename KeyT, typename std::enable_if<std::is_integral<KeyT>::value>::type * = nullptr>
+    constexpr const bool is_gcc_integral_std_hash(const KeyT & key) const {
+        return ((std::hash<KeyT>(KeyT(1)) == 1) && (std::hash<KeyT>(KeyT(100)) == 100));
+    }
+
     inline size_type index_salt() const noexcept {
         return (size_type)((std::uintptr_t)this->ctrls() >> 12);
     }
@@ -948,7 +958,7 @@ private:
         );
 #elif defined(__GNUC__) || (defined(__clang__) && !defined(_MSC_VER))
         std::size_t hash_code;
-        if (std::is_integral<key_type>::value)
+        if (std::is_integral<key_type>::value && is_gcc_integral_std_hash(key))
             hash_code = hashes::fnv_1a((const unsigned char *)&key, sizeof(key_type));
         else
             hash_code = static_cast<std::size_t>(this->hasher_(key));
