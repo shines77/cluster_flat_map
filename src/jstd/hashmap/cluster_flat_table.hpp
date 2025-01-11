@@ -87,7 +87,7 @@
 
 #define CLUSTER_USE_GROUP_SCAN      1
 
-#ifndef _DEBUG
+#ifdef _DEBUG
 #define CLUSTER_DISPLAY_DEBUG_INFO  1
 #endif
 
