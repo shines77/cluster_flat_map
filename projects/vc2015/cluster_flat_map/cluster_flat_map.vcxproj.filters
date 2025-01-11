@@ -239,6 +239,15 @@
     <ClInclude Include="..\..\..\src\jstd\hashmap\flat_map_slot_policy.hpp">
       <Filter>src\jstd\hashmap</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\robin_hash_map.h">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\key_extractor.h">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jstd\hashmap\map_layout_policy.h">
+      <Filter>src\jstd\hashmap</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jstd\dll_main.cpp">

@@ -100,7 +100,7 @@ public:
           index_(static_cast<ssize_type>(index)) {
     }
     flat_map_iterator(const hashmap_type * owner, size_type index) noexcept
-        : owner_(owner), index_(reinterpret_cast<ssize_type>(index)) {
+        : owner_(owner), index_(static_cast<ssize_type>(index)) {
     }
     flat_map_iterator(slot_type * slot) noexcept
         : owner_(nullptr), index_(0) {

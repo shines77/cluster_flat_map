@@ -3,7 +3,16 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "main", "main", "{E76DBBD0-7FFB-4445-99E7-338F03C26873}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "bench", "bench", "{20635C67-928F-4D89-900E-E6A3B56A3201}"
+EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cluster_flat_map", "projects\vc2015\cluster_flat_map\cluster_flat_map.vcxproj", "{F063A895-C610-4410-AECF-59690C8ED152}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cardinal_bench", "projects\vc2015\cardinal_bench\cardinal_bench.vcxproj", "{6AE156EC-6856-4310-870F-480FF0EAA817}"
+	ProjectSection(ProjectDependencies) = postProject
+		{F063A895-C610-4410-AECF-59690C8ED152} = {F063A895-C610-4410-AECF-59690C8ED152}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,8 +30,20 @@ Global
 		{F063A895-C610-4410-AECF-59690C8ED152}.Release|x64.Build.0 = Release|x64
 		{F063A895-C610-4410-AECF-59690C8ED152}.Release|x86.ActiveCfg = Release|Win32
 		{F063A895-C610-4410-AECF-59690C8ED152}.Release|x86.Build.0 = Release|Win32
+		{6AE156EC-6856-4310-870F-480FF0EAA817}.Debug|x64.ActiveCfg = Debug|x64
+		{6AE156EC-6856-4310-870F-480FF0EAA817}.Debug|x64.Build.0 = Debug|x64
+		{6AE156EC-6856-4310-870F-480FF0EAA817}.Debug|x86.ActiveCfg = Debug|Win32
+		{6AE156EC-6856-4310-870F-480FF0EAA817}.Debug|x86.Build.0 = Debug|Win32
+		{6AE156EC-6856-4310-870F-480FF0EAA817}.Release|x64.ActiveCfg = Release|x64
+		{6AE156EC-6856-4310-870F-480FF0EAA817}.Release|x64.Build.0 = Release|x64
+		{6AE156EC-6856-4310-870F-480FF0EAA817}.Release|x86.ActiveCfg = Release|Win32
+		{6AE156EC-6856-4310-870F-480FF0EAA817}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{F063A895-C610-4410-AECF-59690C8ED152} = {E76DBBD0-7FFB-4445-99E7-338F03C26873}
+		{6AE156EC-6856-4310-870F-480FF0EAA817} = {20635C67-928F-4D89-900E-E6A3B56A3201}
 	EndGlobalSection
 EndGlobal

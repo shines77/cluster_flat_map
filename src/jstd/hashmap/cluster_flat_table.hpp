@@ -374,7 +374,7 @@ public:
     size_type size() const noexcept { return this->slot_size(); }
     size_type capacity() const noexcept { return this->slot_capacity(); }
     size_type max_size() const noexcept {
-        return std::numeric_limits<difference_type>::max() / sizeof(value_type);
+        return std::numeric_limits<difference_type>::(max)() / sizeof(value_type);
     }
 
     size_type slot_size() const { return this->slot_size_; }
@@ -398,7 +398,7 @@ public:
     size_type bucket_size(size_type n) const noexcept { return 1; }
     size_type bucket_count() const noexcept { return this->slot_capacity(); }
     size_type max_bucket_count() const noexcept {
-        return std::numeric_limits<difference_type>::max() / sizeof(ctrl_type);
+        return std::numeric_limits<difference_type>::(max)() / sizeof(ctrl_type);
     }
 
     size_type bucket(const key_type & key) const {
@@ -1706,6 +1706,7 @@ private:
     }
 
     template <bool AlwaysUpdate>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> emplace_impl(const init_type & value) {
         auto find_info = this->find_and_insert(value.first);
         size_type slot_index = find_info.first;
@@ -1727,6 +1728,7 @@ private:
     }
 
     template <bool AlwaysUpdate>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> emplace_impl(init_type && value) {
         auto find_info = this->find_and_insert(value.first);
         size_type slot_index = find_info.first;
@@ -1757,6 +1759,7 @@ private:
     }
 
     template <bool AlwaysUpdate, typename KeyT, typename MappedT>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> emplace_impl(KeyT && key, MappedT && value) {
         auto find_info = this->find_and_insert(key);
         size_type slot_index = find_info.first;
@@ -1771,7 +1774,7 @@ private:
             this->slot_size_++;
         } else {
             // The key to be inserted already exists.
-            static constexpr bool isMappedType = jstd::is_same_ex<MappedT, mapped_type>::value;
+            static constexpr bool isMappedType = std::is_same<MappedT, mapped_type>::value;
             if (AlwaysUpdate) {
                 slot_type * slot = this->slot_at(slot_index);
                 if (isMappedType) {
@@ -1786,6 +1789,7 @@ private:
     }
 
     template <bool AlwaysUpdate, typename KeyT, typename ... Args>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> emplace_impl(KeyT && key, Args && ... args) {
         auto find_info = this->find_and_insert(key);
         size_type slot_index = find_info.first;
@@ -1812,6 +1816,7 @@ private:
 
     template <bool AlwaysUpdate, typename PieceWise,
               typename ... Ts1, typename ... Ts2>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> emplace_impl(PieceWise && hint,
                                            std::tuple<Ts1...> && first,
                                            std::tuple<Ts2...> && second) {
@@ -1832,6 +1837,7 @@ private:
             // The key to be inserted already exists.
             if (AlwaysUpdate) {
                 tuple_wrapper2<mapped_type> mapped_wrapper(std::move(second));
+                slot_type * slot = this->slot_at(slot_index);
                 slot->value.second = std::move(mapped_wrapper.value());
             }
         }
@@ -1847,6 +1853,7 @@ private:
               (!jstd::is_same_ex<First, key_type>::value &&
                !std::is_constructible<key_type, First &&>::value)>::type * = nullptr,
                 typename ... Args>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> emplace_impl(First && first, Args && ... args) {
         alignas(slot_type) unsigned char raw[sizeof(slot_type)];
         slot_type * tmp_slot = reinterpret_cast<slot_type *>(&raw);
@@ -1879,6 +1886,7 @@ private:
     ////////////////////////////////////////////////////////////////////////////////////////////
 
     template <typename KeyT, typename ... Args>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> try_emplace_impl(const KeyT & key, Args && ... args) {
         auto find_info = this->find_and_insert(key);
         size_type slot_index = find_info.first;
@@ -1897,6 +1905,7 @@ private:
     }
 
     template <typename KeyT, typename ... Args>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> try_emplace_impl(KeyT && key, Args && ... args) {
         auto find_info = this->find_and_insert(key);
         size_type slot_index = find_info.first;
