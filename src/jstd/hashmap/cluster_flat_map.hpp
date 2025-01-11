@@ -77,7 +77,6 @@ template <typename Key, typename Value,
                                                          typename std::remove_const<Value>::type> > >
 class JSTD_DLL cluster_flat_map
 {
-    //
 public:
     typedef flat_map_type_policy<Key, Value>    type_policy;
     typedef std::size_t                         size_type;

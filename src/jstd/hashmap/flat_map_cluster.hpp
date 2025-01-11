@@ -67,6 +67,9 @@ public:
     static constexpr std::uint8_t kEmptySlot    = 0b00000000 & kHashMask;
     static constexpr std::uint8_t kOverflowMask = 0b10000000;
 
+    static_assert(((kHashMask & kOverflowMask) == 0), "kHashMask & kOverflowMask must be 0");
+    static_assert(((kHashMask | kOverflowMask) == 0b11111111), "kHashMask & kOverflowMask must be 0b11111111");
+
     typedef std::uint8_t value_type;
     typedef std::uint8_t hash_type;
 
@@ -100,12 +103,6 @@ public:
         return (overflow != 0);
     }
 
-    inline bool is_overflow_strict() const {
-        value_type overflow = overflow_bits(this->value);
-        value_type hash = hash_bits(this->value);
-        return ((overflow != 0) && (hash != kEmptySlot));
-    }
-
     bool is_equals(hash_type hash) {
         value_type hash8 = hash_bits(this->value);
         return (hash == hash8);
@@ -133,16 +130,23 @@ public:
     }
 
     inline void set_used(hash_type hash) {
+        assert(hash_bits(hash) != kEmptySlot);
         this->value = hash;
     }
 
     inline void set_used64(std::size_t hash) {
+        assert(hash_bits(hash) != kEmptySlot);
+        this->value = hash_bits(hash);
+    }
+
+    inline void set_used_strict(hash_type hash) {
+        assert(hash_bits(hash) != kEmptySlot);
         this->value = hash_bits(hash);
     }
 
     inline void set_overflow() {
-        assert(this->value != kEmptySlot);
-        this->value &= kOverflowMask;
+        assert(hash_bits(this->value) != kEmptySlot);
+        this->value |= kOverflowMask;
     }
 
     inline void set_value(value_type value) {
@@ -211,12 +215,6 @@ public:
         return ctrl->is_overflow();
     }
 
-    inline bool is_overflow_strict(std::size_t pos) const {
-        assert(pos < kGroupWidth);
-        const ctrl_type * ctrl = &ctrls[pos];
-        return ctrl->is_overflow_strict();
-    }
-
     bool is_equals(std::size_t pos, hash_type hash) {
         assert(pos < kGroupWidth);
         const ctrl_type * ctrl = &ctrls[pos];
@@ -245,6 +243,12 @@ public:
         assert(pos < kGroupWidth);
         ctrl_type * ctrl = &ctrls[pos];
         ctrl->set_used64(hash);
+    }
+
+    inline void set_used_strict(std::size_t pos, hash_type hash) {
+        assert(pos < kGroupWidth);
+        ctrl_type * ctrl = &ctrls[pos];
+        ctrl->set_used_strict(hash);
     }
 
     inline void set_overflow(std::size_t pos) {

@@ -87,7 +87,9 @@
 
 #define CLUSTER_USE_GROUP_SCAN      1
 
+#ifdef _DEBUG
 #define CLUSTER_DISPLAY_DEBUG_INFO  1
+#endif
 
 namespace jstd {
 
@@ -754,13 +756,23 @@ public:
         return (this->ctrls() + std::ptrdiff_t(slot_index));
     }
 
-    inline group_type * group_at(size_type slot_index) noexcept {
+    inline group_type * group_at(size_type group_index) noexcept {
+        assert(group_index <= this->group_capacity());
+        return (this->groups() + std::ptrdiff_t(group_index));
+    }
+
+    inline const group_type * group_at(size_type group_index) const noexcept {
+        assert(group_index <= this->slot_capacity());
+        return (this->groups() + std::ptrdiff_t(group_index));
+    }
+
+    inline group_type * group_by_slot_index(size_type slot_index) noexcept {
         assert(slot_index <= this->slot_capacity());
         size_type group_index = slot_index / kGroupWidth;
         return (this->groups() + std::ptrdiff_t(group_index));
     }
 
-    inline const group_type * group_at(size_type slot_index) const noexcept {
+    inline const group_type * group_by_slot_index(size_type slot_index) const noexcept {
         assert(slot_index <= this->slot_capacity());
         size_type group_idx = slot_index / kGroupWidth;
         return (this->groups() + std::ptrdiff_t(group_idx));
@@ -980,7 +992,7 @@ private:
     inline std::uint8_t ctrl_for_hash(std::size_t hash_code) const noexcept {
         std::size_t ctrl_hash = this->ctrl_hasher(hash_code);
         std::uint8_t ctrl_hash8 = ctrl_type::hash_bits(ctrl_hash);
-        return ctrl_hash8;
+        return ((ctrl_hash8 != kEmptySlot) ? ctrl_hash8 : std::uint8_t(8));
     }
 
     size_type index_of(iterator iter) const {
@@ -1076,13 +1088,14 @@ private:
 
     void destroy_data() {
         // Note!!: destroy_slots() need use this->ctrls(), so must destroy slots first.
+        size_type group_capacity = this->group_capacity();
         this->destroy_slots();
-        this->destroy_groups();
+        this->destroy_groups(group_capacity);
     }
 
-    void destroy_groups() noexcept {
+    void destroy_groups(size_type group_capacity) noexcept {
         if (this->groups_ != this_type::default_empty_groups()) {
-            size_type total_group_alloc_count = this->TotalGroupAllocCount<kGroupAlignment>(this->group_capacity());
+            size_type total_group_alloc_count = this->TotalGroupAllocCount<kGroupAlignment>(group_capacity);
 #if CLUSTER_USE_SEPARATE_SLOTS
             GroupAllocTraits::deallocate(this->group_allocator_, this->groups_alloc_, total_group_alloc_count);
             this->groups_alloc_ = this_type::default_empty_groups();
@@ -1327,7 +1340,6 @@ private:
                 assert(new_capacity >= this->slot_size());
             }
 
-            ctrl_type * old_ctrls = this->ctrls();
             group_type * old_groups = this->groups();
             group_type * old_groups_alloc = this->groups_alloc();
             size_type old_group_capacity = this->group_capacity();
@@ -1337,6 +1349,7 @@ private:
             size_type old_slot_size = this->slot_size();
             size_type old_slot_mask = this->slot_mask();
             size_type old_slot_capacity = this->slot_capacity();
+            size_type old_slot_threshold = this->slot_threshold();
 
             this->create_slots<false>(new_capacity);
 
@@ -1440,7 +1453,7 @@ private:
     JSTD_FORCED_INLINE
     size_type skip_empty_slots(size_type start_slot_index) const {
         if (this->size() != 0) {
-            group_type * group = this->group_at(start_slot_index);
+            group_type * group = this->group_by_slot_index(start_slot_index);
             group_type * last_group = this->last_group();
             size_type slot_pos = start_slot_index % kGroupWidth;
             size_type slot_base_index = start_slot_index - slot_pos;
@@ -1538,7 +1551,8 @@ private:
             skip_groups++;
             if (unlikely(skip_groups > kSkipGroupsLimit)) {
                 std::cout << "find_impl(): key = " << key <<
-                             ", skip_groups = " << skip_groups << std::endl;
+                             ", skip_groups = " << skip_groups <<
+                             ", load_factor = " << this->load_factor() << std::endl;
             }
 #endif
         }
@@ -1602,7 +1616,8 @@ private:
             skip_groups++;
             if (unlikely(skip_groups > kSkipGroupsLimit)) {
                 std::cout << "find_index(): key = " << key <<
-                             ", skip_groups = " << skip_groups << std::endl;
+                             ", skip_groups = " << skip_groups <<
+                             ", load_factor = " << this->load_factor() << std::endl;
             }
 #endif
         }
@@ -1647,7 +1662,8 @@ private:
             skip_groups++;
             if (unlikely(skip_groups > kSkipGroupsLimit)) {
                 std::cout << "find_first_empty_to_insert(): key = " << key <<
-                             ", skip_groups = " << skip_groups << std::endl;
+                             ", skip_groups = " << skip_groups <<
+                             ", load_factor = " << this->load_factor() << std::endl;
             }
 #endif
         }
@@ -1676,6 +1692,7 @@ private:
         }
 
         slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
+        assert(slot_index < this->slot_capacity());
         return { slot_index, kIsNotExists };
     }
 
@@ -1737,6 +1754,7 @@ private:
             // The key to be inserted is not exists.
             slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
+            assert(slot_index < this->slot_capacity());
             SlotPolicyTraits::construct(&this->slot_allocator_, slot, std::forward<init_type>(value));
             this->slot_size_++;
         } else {
