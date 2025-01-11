@@ -956,7 +956,14 @@ private:
     // Do the index hash on the basis of hash code for the index_for_hash().
     //
     inline std::size_t index_hasher(std::size_t value) const noexcept {
+#if defined(__GNUC__) || (defined(__clang__) && !defined(_MSC_VER))
+        if (std::is_integral<key_type>::value)
+            return (std::size_t)hashes::mum_hash64((std::uint64_t)value, 11400714819323198485ull);
+        else
+            return value;
+#else
         return value;
+#endif
     }
 
     //
