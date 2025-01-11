@@ -87,7 +87,7 @@
 
 #define CLUSTER_USE_GROUP_SCAN      1
 
-#ifdef _DEBUG
+#ifndef _DEBUG
 #define CLUSTER_DISPLAY_DEBUG_INFO  1
 #endif
 
@@ -1623,6 +1623,19 @@ private:
         }
     }
 
+    void display_meta_datas(group_type * group) {
+        ctrl_type * ctrl = reinterpret_cast<ctrl_type *>(group);
+        printf("[");
+        for (std::size_t i = 0; i < kGroupWidth; i++) {
+            if (i < kGroupWidth - 1)
+                printf(" %02x,", (int)ctrl->get_value());
+            else
+                printf(" %02x", (int)ctrl->get_value());
+            ctrl++;
+        }
+        printf(" ]\n");
+    }
+
     template <typename KeyT>
     JSTD_FORCED_INLINE
     size_type find_first_empty_to_insert(const KeyT & key, size_type slot_pos, std::uint8_t ctrl_hash) {
@@ -1649,6 +1662,14 @@ private:
                     group->set_overflow(group_pos);
                 }
             }
+#if CLUSTER_DISPLAY_DEBUG_INFO
+            if (unlikely(skip_groups > kSkipGroupsLimit)) {
+                std::cout << "find_first_empty_to_insert(): key = " << key <<
+                             ", skip_groups = " << skip_groups <<
+                             ", load_factor = " << this->load_factor() << std::endl;
+                display_meta_datas(group);
+            }
+#endif
             slot_base += kGroupWidth;
             group++;
             if (unlikely(group >= last_group)) {
