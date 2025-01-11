@@ -266,7 +266,7 @@ public:
             empty_bits = _mm_setones_si128();
         else
             empty_bits = _mm_set1_epi8(kEmptySlot);
-        
+
         __m128i match_mask = _mm_cmpeq_epi8(_mm_and_si128(ctrl_bits, mask_bits), empty_bits);
         int mask = _mm_movemask_epi8(match_mask);
         return static_cast<std::uint32_t>(mask);
@@ -292,7 +292,7 @@ public:
             empty_bits = _mm_set1_epi8(kEmptySlot);
             match_mask = _mm_cmpeq_epi8(_mm_and_si128(ctrl_bits, mask_bits), empty_bits);
         }
-        
+
         int mask = _mm_movemask_epi8(match_mask);
         if (kEmptySlot != 0b00000000 && kEmptySlot != 0b11111111) {
             mask = ~mask & 0xFFFF;

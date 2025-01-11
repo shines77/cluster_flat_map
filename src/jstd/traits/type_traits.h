@@ -334,26 +334,30 @@ void if_constexpr(F f, G g = { })
 }
 
 template <bool Boolean, typename T, typename std::enable_if<Boolean>::type * = nullptr>
-void copy_assign_if(T & x, const T & y)
+void copy_assign_if(T & dest, T & src)
 {
-    x = y;
+    dest = src;
 }
 
 template <bool Boolean, typename T, typename std::enable_if<!Boolean>::type * = nullptr>
-void copy_assign_if(T &, const T &)
+void copy_assign_if(T & dest, T & src)
 {
     /* Do nothing ! */
+    JSTD_UNUSED(dest);
+    JSTD_UNUSED(src);
 }
 
 template <bool Boolean, typename T, typename std::enable_if<Boolean>::type * = nullptr>
-void move_assign_if(T & x, T & y)
+void move_assign_if(T & dest, T & src)
 {
-    x = std::move(y);
+    dest = std::move(src);
 }
 
 template <bool Boolean, typename T, typename std::enable_if<!Boolean>::type * = nullptr>
-void move_assign_if(T &, T &) {
+void move_assign_if(T & dest, T & src) {
     /* Do nothing ! */
+    JSTD_UNUSED(dest);
+    JSTD_UNUSED(src);
 }
 
 template <bool Boolean, typename T, typename std::enable_if<Boolean>::type * = nullptr>
@@ -364,9 +368,11 @@ void swap_if(T & x, T & y)
 }
 
 template <bool Boolean, typename T, typename std::enable_if<!Boolean>::type * = nullptr>
-void swap_if(T &, T &)
+void swap_if(T & x, T & y)
 {
     /* Do nothing ! */
+    JSTD_UNUSED(x);
+    JSTD_UNUSED(y);
 }
 
 template <typename Allocator>
