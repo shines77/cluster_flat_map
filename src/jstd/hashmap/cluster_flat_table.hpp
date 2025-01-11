@@ -595,28 +595,61 @@ public:
     ///
     /// insert(value)
     ///
+    JSTD_FORCED_INLINE
+    std::pair<iterator, bool> insert(const value_type & value) {
+        return this->emplace_impl<false>(value);
+    }
+
+    JSTD_FORCED_INLINE
+    std::pair<iterator, bool> insert(value_type && value) {
+        return this->emplace_impl<false>(std::move(value));
+    }
+
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> insert(const init_type & value) {
         return this->emplace_impl<false>(value);
     }
 
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> insert(init_type && value) {
         return this->emplace_impl<false>(std::move(value));
     }
 
-    template <typename P>
+    template <typename P, typename std::enable_if<
+              (!std::is_same<P, value_type>::value &&
+               !std::is_same<P, init_type >::value) &&
+               (std::is_constructible<value_type, P &&>::value ||
+                std::is_constructible<init_type,  P &&>::value)>::type * = nullptr>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> insert(P && value) {
         return this->emplace_impl<false>(std::forward<P>(value));
     }
 
+    JSTD_FORCED_INLINE
+    iterator insert(const_iterator hint, const value_type & value) {
+        return this->emplace_impl<false>(value).first;
+    }
+
+    JSTD_FORCED_INLINE
+    iterator insert(const_iterator hint, value_type && value) {
+        return this->emplace_impl<false>(std::move(value)).first;
+    }
+
+    JSTD_FORCED_INLINE
     iterator insert(const_iterator hint, const init_type & value) {
         return this->emplace_impl<false>(value).first;
     }
 
+    JSTD_FORCED_INLINE
     iterator insert(const_iterator hint, init_type && value) {
         return this->emplace_impl<false>(std::move(value)).first;
     }
 
-    template <typename P>
+    template <typename P, typename std::enable_if<
+              (!std::is_same<P, value_type>::value &&
+               !std::is_same<P, init_type >::value) &&
+               (std::is_constructible<value_type, P &&>::value ||
+                std::is_constructible<init_type,  P &&>::value)>::type * = nullptr>
     iterator insert(const_iterator hint, P && value) {
         return this->emplace_impl<false>(std::forward<P>(value)).first;
     }
@@ -1939,7 +1972,7 @@ private:
     std::pair<iterator, bool> try_emplace_impl(const KeyT & key, Args && ... args) {
         auto find_info = this->find_and_insert(key);
         size_type slot_index = find_info.first;
-        bool is_exists = find_info.second;        
+        bool is_exists = find_info.second;
         if (!is_exists) {
             // The key to be inserted is not exists.
             slot_type * slot = this->slot_at(slot_index);

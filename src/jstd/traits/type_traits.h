@@ -229,7 +229,7 @@ struct are_transparent {
 };
 
 template <typename Key, typename UnorderedMap>
-struct transparent_non_iterable {
+struct are_transparent_and_non_iterable {
     typedef typename UnorderedMap::hasher           hash;
     typedef typename UnorderedMap::key_equal        key_equal;
     typedef typename UnorderedMap::iterator         iterator;
@@ -237,8 +237,8 @@ struct transparent_non_iterable {
 
     static const bool value =
         are_transparent<Key, hash, key_equal>::value &&
-        !std::is_convertible<Key, iterator>::value &&
-        !std::is_convertible<Key, const_iterator>::value;
+        !std::is_convertible<Key &&, iterator>::value &&
+        !std::is_convertible<Key &&, const_iterator>::value;
 };
 
 template <typename K, typename key_type, bool is_transparent>

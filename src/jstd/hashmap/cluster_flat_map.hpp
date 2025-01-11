@@ -345,50 +345,122 @@ public:
     ///
     /// insert(value)
     ///
+    JSTD_FORCED_INLINE
+    std::pair<iterator, bool> insert(const value_type & value) {
+        return table_.emplace(value);
+    }
+
+    JSTD_FORCED_INLINE
+    std::pair<iterator, bool> insert(value_type && value) {
+        return table_.emplace(std::move(value));
+    }
+
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> insert(const init_type & value) {
         return table_.emplace(value);
     }
 
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> insert(init_type && value) {
         return table_.emplace(std::move(value));
     }
 
-    template <typename P>
+    template <typename P, typename std::enable_if<
+              (!std::is_same<P, value_type>::value &&
+               !std::is_same<P, init_type >::value) &&
+               (std::is_constructible<value_type, P &&>::value ||
+                std::is_constructible<init_type,  P &&>::value)>::type * = nullptr>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> insert(P && value) {
         return table_.emplace(std::forward<P>(value));
     }
 
+    JSTD_FORCED_INLINE
+    iterator insert(const_iterator hint, const value_type & value) {
+        return table_.emplace(value).first;
+    }
+
+    JSTD_FORCED_INLINE
+    iterator insert(const_iterator hint, value_type && value) {
+        return table_.emplace(std::move(value)).first;
+    }
+
+    JSTD_FORCED_INLINE
     iterator insert(const_iterator hint, const init_type & value) {
-        return table_.emplace(hint, value);
+        return table_.emplace(value).first;
     }
 
+    JSTD_FORCED_INLINE
     iterator insert(const_iterator hint, init_type && value) {
-        return table_.emplace(hint, std::move(value));
+        return table_.emplace(std::move(value)).first;
     }
 
-    template <typename P>
+    template <typename P, typename std::enable_if<
+              (!std::is_same<P, value_type>::value &&
+               !std::is_same<P, init_type >::value) &&
+               (std::is_constructible<value_type, P &&>::value ||
+                std::is_constructible<init_type,  P &&>::value)>::type * = nullptr>
+    JSTD_FORCED_INLINE
     iterator insert(const_iterator hint, P && value) {
-        return table_.emplace(hint, std::forward<P>(value));
+        return table_.emplace(hint, std::forward<P>(value)).first;
     }
 
     template <typename InputIter>
+    JSTD_FORCED_INLINE
     void insert(InputIter first, InputIter last) {
-        table_.insert(first, last);
+        for (InputIter pos = first; pos != last; ++pos) {
+            table_.emplace(*first);
+        }
     }
 
     void insert(std::initializer_list<value_type> ilist) {
-        table_.insert(ilist);
+        this->insert(ilist.begin(), ilist.end());
+    }
+
+    ///
+    /// insert_or_assign(key, value)
+    ///
+    template <typename MappedT>
+    std::pair<iterator, bool> insert_or_assign(const key_type & key, MappedT && value) {
+        return this->emplace_impl<true>(key, std::forward<MappedT>(value));
+    }
+
+    template <typename MappedT>
+    std::pair<iterator, bool> insert_or_assign(key_type && key, MappedT && value) {
+        return this->emplace_impl<true>(std::move(key), std::forward<MappedT>(value));
+    }
+
+    template <typename KeyT, typename MappedT>
+    std::pair<iterator, bool> insert_or_assign(KeyT && key, MappedT && value) {
+        return this->emplace_impl<true>(std::move(key), std::forward<MappedT>(value));
+    }
+
+    template <typename MappedT>
+    iterator insert_or_assign(const_iterator hint, const key_type & key, MappedT && value) {
+        return this->emplace_impl<true>(key, std::forward<MappedT>(value))->first;
+    }
+
+    template <typename MappedT>
+    iterator insert_or_assign(const_iterator hint, key_type && key, MappedT && value) {
+        return this->emplace_impl<true>(std::move(key), std::forward<MappedT>(value))->first;
+    }
+
+    template <typename KeyT, typename MappedT>
+    iterator insert_or_assign(const_iterator hint, KeyT && key, MappedT && value) {
+        return this->emplace_impl<true>(std::move(key), std::forward<MappedT>(value))->first;
     }
 
     ///
     /// emplace(args...)
     ///
     template <typename ... Args>
+    JSTD_FORCED_INLINE
     std::pair<iterator, bool> emplace(Args && ... args) {
         return table_.emplace(std::forward<Args>(args)...);
     }
 
     template <typename ... Args>
+    JSTD_FORCED_INLINE
     iterator emplace_hint(const_iterator hint, Args && ... args) {
         return table_.emplace(hint, std::forward<Args>(args)...);
     }
@@ -397,32 +469,80 @@ public:
     /// try_emplace(key, args...)
     ///
     template <typename ... Args>
-    std::pair<iterator, bool> try_emplace(const Key & key, Args && ... args) {
+    JSTD_FORCED_INLINE
+    std::pair<iterator, bool> try_emplace(const key_type & key, Args && ... args) {
         return table_.try_emplace(key, std::forward<Args>(args)...);
     }
 
     template <typename ... Args>
-    std::pair<iterator, bool> try_emplace(Key && key, Args && ... args) {
+    JSTD_FORCED_INLINE
+    std::pair<iterator, bool> try_emplace(key_type && key, Args && ... args) {
         return table_.try_emplace(std::move(key), std::forward<Args>(args)...);
     }
 
     template <typename KeyT, typename ... Args>
-    std::pair<iterator, bool> try_emplace(KeyT && key, Args && ... args) {
+    JSTD_FORCED_INLINE
+    typename std::enable_if<jstd::are_transparent<KeyT, Hash, KeyEqual>::value &&
+                           (!std::is_convertible<key_type, const KeyT &>::value &&
+                            !std::is_convertible<key_type, KeyT &&>::value) &&
+                            !std::is_same<key_type, KeyT>::value &&
+                            !std::is_convertible<KeyT, iterator>::value &&
+                            !std::is_convertible<KeyT, const_iterator>::value,
+                             std::pair<iterator, bool> >::type
+    try_emplace(KeyT && key, Args && ... args) {
+        return table_.try_emplace(std::forward<KeyT>(key), std::forward<Args>(args)...);
+    }
+
+    // For compatibility with versions below C++17 that do not support T::is_transparent
+    template <typename KeyT, typename ... Args>
+    JSTD_FORCED_INLINE
+    typename std::enable_if<!jstd::are_transparent<KeyT, Hash, KeyEqual>::value ||
+                            (std::is_convertible<key_type, const KeyT &>::value ||
+                             std::is_convertible<key_type, KeyT &&>::value) &&
+                            !std::is_same<key_type, KeyT>::value &&
+                            !std::is_convertible<KeyT, iterator>::value &&
+                            !std::is_convertible<KeyT, const_iterator>::value,
+                             std::pair<iterator, bool> >::type
+    try_emplace(KeyT && key, Args && ... args) {
         return table_.try_emplace(std::forward<KeyT>(key), std::forward<Args>(args)...);
     }
 
     template <typename ... Args>
-    std::pair<iterator, bool> try_emplace(const_iterator hint, const Key & key, Args && ... args) {
+    JSTD_FORCED_INLINE
+    iterator try_emplace(const_iterator hint, const key_type & key, Args && ... args) {
         return table_.try_emplace(hint, key, std::forward<Args>(args)...);
     }
 
     template <typename ... Args>
-    std::pair<iterator, bool> try_emplace(const_iterator hint, Key && key, Args && ... args) {
+    JSTD_FORCED_INLINE
+    iterator try_emplace(const_iterator hint, key_type && key, Args && ... args) {
         return table_.try_emplace(hint, std::move(key), std::forward<Args>(args)...);
     }
 
     template <typename KeyT, typename ... Args>
-    std::pair<iterator, bool> try_emplace(const_iterator hint, KeyT && key, Args && ... args) {
+    JSTD_FORCED_INLINE
+    typename std::enable_if<jstd::are_transparent<KeyT, Hash, KeyEqual>::value &&
+                           (!std::is_convertible<key_type, const KeyT &>::value &&
+                            !std::is_convertible<key_type, KeyT &&>::value) &&
+                            !std::is_same<key_type, KeyT>::value &&
+                            !std::is_convertible<KeyT, iterator>::value &&
+                            !std::is_convertible<KeyT, const_iterator>::value,
+                             iterator >::type
+    try_emplace(const_iterator hint, KeyT && key, Args && ... args) {
+        return table_.try_emplace(hint, std::forward<KeyT>(key), std::forward<Args>(args)...);
+    }
+
+    // For compatibility with versions below C++17 that do not support T::is_transparent
+    template <typename KeyT, typename ... Args>
+    JSTD_FORCED_INLINE
+    typename std::enable_if<!jstd::are_transparent<KeyT, Hash, KeyEqual>::value ||
+                            (std::is_convertible<key_type, const KeyT &>::value ||
+                             std::is_convertible<key_type, KeyT &&>::value) &&
+                            !std::is_same<key_type, KeyT>::value &&
+                            !std::is_convertible<KeyT, iterator>::value &&
+                            !std::is_convertible<KeyT, const_iterator>::value,
+                             iterator >::type
+    try_emplace(const_iterator hint, KeyT && key, Args && ... args) {
         return table_.try_emplace(hint, std::forward<KeyT>(key), std::forward<Args>(args)...);
     }
 
