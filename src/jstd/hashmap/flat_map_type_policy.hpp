@@ -52,7 +52,7 @@
 #pragma once
 
 #include <type_traits>
-#include <utility>
+#include <utility>          // For std::pair<F, S>
 
 #include "jstd/basic/stddef.h"
 #include "jstd/traits/type_traits.h"
@@ -71,7 +71,7 @@ public:
 
     typedef std::pair<raw_key_type, raw_mapped_type>        init_type;
     typedef std::pair<raw_key_type &&, raw_mapped_type &&>  moved_type;
-    typedef std::pair<const Key, Value>                     value_type;
+    typedef std::pair<const raw_key_type, raw_mapped_type>  value_type;
 
     typedef value_type                                      element_type;
 
@@ -84,7 +84,7 @@ public:
     }
 
     template <typename K, typename V>
-    static raw_key_type const & extract(std::pair<K, V> const & kv) {
+    static const raw_key_type & extract(const std::pair<K, V> & kv) {
         return kv.first;
     }
 
@@ -105,14 +105,14 @@ public:
     }
 
     template <typename Allocator, typename ... Args>
-    static void construct(Allocator & al, value_type * p, Args&&... args)
+    static void construct(Allocator & al, value_type * p, Args &&... args)
     {
         constructibility_checker::check(al, p, std::forward<Args>(args)...);
         std::allocator_traits<jstd::remove_cvref_t<decltype(al)>>::construct(al, p, std::forward<Args>(args)...);
     }
 
     template <typename Allocator, typename ... Args>
-    static void construct(Allocator & al, key_type * p, Args&&... args)
+    static void construct(Allocator & al, key_type * p, Args &&... args)
     {
         constructibility_checker::check(al, p, std::forward<Args>(args)...);
         std::allocator_traits<jstd::remove_cvref_t<decltype(al)>>::construct(al, p, std::forward<Args>(args)...);

@@ -735,6 +735,12 @@ void test_hashmap()
 
     string_hash_map.insert(std::make_pair(std::string("abc"), std::string("123")));
 
+    std::pair<const Key, Value> const_pair("efg", "456");
+    string_hash_map.insert(const_pair);
+
+    std::pair<Key, Value> pair("hij", "789");
+    string_hash_map.insert(pair);
+
     printf("string_hash_map.size() = %d\n", (int)string_hash_map.size());
     printf("string_hash_map.max_load_factor() = %0.3f\n", string_hash_map.max_load_factor());
 

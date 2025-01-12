@@ -252,8 +252,8 @@ private:
     ctrl_allocator_type     ctrl_allocator_;
     slot_allocator_type     slot_allocator_;
 
-    static constexpr bool kIsNotExists = false;
-    static constexpr bool kIsExists = true;
+    static constexpr bool kIsExists = false;
+    static constexpr bool kNeedInsert = true;
 
 public:
     cluster_flat_table() : cluster_flat_table(kDefaultCapacity) {}
@@ -1757,12 +1757,11 @@ private:
 
         slot_index = this->find_first_empty_to_insert(key, slot_pos, ctrl_hash);
         assert(slot_index < this->slot_capacity());
-        return { slot_index, kIsNotExists };
+        return { slot_index, kNeedInsert };
     }
 
-    template <typename KeyT>
     JSTD_FORCED_INLINE
-    size_type insert_unique_and_no_grow(const KeyT & key) {
+    size_type insert_unique_and_no_grow(const key_type & key) {
         std::size_t hash_code = this->hash_for(key);
         size_type slot_pos = this->index_for_hash(hash_code);
         std::uint8_t ctrl_hash = this->ctrl_for_hash(hash_code);
@@ -1786,13 +1785,17 @@ private:
         assert(this->slot_size() <= this->slot_capacity());
     }
 
-    template <bool AlwaysUpdate>
+    template <bool AlwaysUpdate, typename ValueT, typename std::enable_if<
+              (std::is_same<ValueT, value_type>::value ||
+               std::is_constructible<value_type, const ValueT &>::value) ||
+              (std::is_same<ValueT, init_type>::value ||
+               std::is_constructible<init_type, const ValueT &>::value)>::type * = nullptr>
     JSTD_FORCED_INLINE
-    std::pair<iterator, bool> emplace_impl(const init_type & value) {
+    std::pair<iterator, bool> emplace_impl(const ValueT & value) {
         auto find_info = this->find_and_insert(value.first);
         size_type slot_index = find_info.first;
-        bool is_exists = find_info.second;        
-        if (!is_exists) {
+        bool need_insert = find_info.second;        
+        if (need_insert) {
             // The key to be inserted is not exists.
             slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
@@ -1805,16 +1808,20 @@ private:
                 slot->value.second = value.second;
             }
         }
-        return { this->iterator_at(slot_index), is_exists };
+        return { this->iterator_at(slot_index), need_insert };
     }
 
-    template <bool AlwaysUpdate>
+    template <bool AlwaysUpdate, typename ValueT, typename std::enable_if<
+              (jstd::is_same_ex<ValueT, value_type>::value ||
+               std::is_constructible<value_type, ValueT &&>::value) ||
+              (jstd::is_same_ex<ValueT, init_type>::value ||
+               std::is_constructible<init_type, ValueT &&>::value)>::type * = nullptr>
     JSTD_FORCED_INLINE
-    std::pair<iterator, bool> emplace_impl(init_type && value) {
+    std::pair<iterator, bool> emplace_impl(ValueT && value) {
         auto find_info = this->find_and_insert(value.first);
         size_type slot_index = find_info.first;
-        bool is_exists = find_info.second;
-        if (!is_exists) {
+        bool need_insert = find_info.second;
+        if (need_insert) {
             // The key to be inserted is not exists.
             slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
@@ -1837,16 +1844,25 @@ private:
                 }
             }
         }
-        return { this->iterator_at(slot_index), is_exists };
+        return { this->iterator_at(slot_index), need_insert };
     }
 
-    template <bool AlwaysUpdate, typename KeyT, typename MappedT>
+    template <bool AlwaysUpdate, typename KeyT, typename MappedT, typename std::enable_if<
+              (!std::is_same<KeyT, value_type>::value &&
+               !std::is_constructible<value_type, KeyT &&>::value) &&
+              (!std::is_same<KeyT, init_type>::value &&
+               !std::is_constructible<init_type, KeyT &&>::value) &&
+              (!std::is_same<KeyT, std::piecewise_construct_t>::value) &&
+               (std::is_same<KeyT, key_type>::value ||
+                std::is_constructible<key_type, KeyT &&>::value) &&
+               (std::is_same<MappedT, mapped_type>::value ||
+                std::is_constructible<mapped_type, MappedT &&>::value)>::type * = nullptr>
     JSTD_FORCED_INLINE
     std::pair<iterator, bool> emplace_impl(KeyT && key, MappedT && value) {
         auto find_info = this->find_and_insert(key);
         size_type slot_index = find_info.first;
-        bool is_exists = find_info.second;
-        if (!is_exists) {
+        bool need_insert = find_info.second;
+        if (need_insert) {
             // The key to be inserted is not exists.
             slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
@@ -1867,16 +1883,24 @@ private:
                 }
             }
         }
-        return { this->iterator_at(slot_index), is_exists };
+        return { this->iterator_at(slot_index), need_insert };
     }
 
-    template <bool AlwaysUpdate, typename KeyT, typename ... Args>
+    template <bool AlwaysUpdate, typename KeyT, typename std::enable_if<
+              (!std::is_same<KeyT, value_type>::value &&
+               !std::is_constructible<value_type, KeyT &&>::value) &&
+              (!std::is_same<KeyT, init_type>::value &&
+               !std::is_constructible<init_type, KeyT &&>::value) &&
+              (!std::is_same<KeyT, std::piecewise_construct_t>::value) &&
+               (std::is_same<KeyT, key_type>::value ||
+                std::is_constructible<key_type, KeyT &&>::value)>::type * = nullptr,
+                typename ... Args>
     JSTD_FORCED_INLINE
     std::pair<iterator, bool> emplace_impl(KeyT && key, Args && ... args) {
         auto find_info = this->find_and_insert(key);
         size_type slot_index = find_info.first;
-        bool is_exists = find_info.second;
-        if (!is_exists) {
+        bool need_insert = find_info.second;
+        if (need_insert) {
             // The key to be inserted is not exists.
             slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
@@ -1893,11 +1917,18 @@ private:
                 slot->value.second = std::move(mapped_value);
             }
         }
-        return { this->iterator_at(slot_index), is_exists };
+        return { this->iterator_at(slot_index), need_insert };
     }
 
-    template <bool AlwaysUpdate, typename PieceWise,
-              typename ... Ts1, typename ... Ts2>
+    template <bool AlwaysUpdate, typename PieceWise, typename std::enable_if<
+              (!std::is_same<PieceWise, value_type>::value &&
+               !std::is_constructible<value_type, PieceWise &&>::value) &&
+              (!std::is_same<PieceWise, init_type>::value &&
+               !std::is_constructible<init_type, PieceWise &&>::value) &&
+                std::is_same<PieceWise, std::piecewise_construct_t>::value &&
+              (!std::is_same<PieceWise, key_type>::value &&
+               !std::is_constructible<key_type, PieceWise &&>::value)>::type * = nullptr,
+                typename ... Ts1, typename ... Ts2>
     JSTD_FORCED_INLINE
     std::pair<iterator, bool> emplace_impl(PieceWise && hint,
                                            std::tuple<Ts1...> && first,
@@ -1905,8 +1936,8 @@ private:
         tuple_wrapper2<key_type> key_wrapper(first);
         auto find_info = this->find_and_insert(key_wrapper.value());
         size_type slot_index = find_info.first;
-        bool is_exists = find_info.second;
-        if (!is_exists) {
+        bool need_insert = find_info.second;
+        if (need_insert) {
             // The key to be inserted is not exists.
             slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
@@ -1923,16 +1954,16 @@ private:
                 slot->value.second = std::move(mapped_wrapper.value());
             }
         }
-        return { this->iterator_at(slot_index), is_exists };
+        return { this->iterator_at(slot_index), need_insert };
     }
 
     template <bool AlwaysUpdate, typename First, typename std::enable_if<
-              (!jstd::is_same_ex<First, value_type>::value &&
+              (!std::is_same<First, value_type>::value &&
                !std::is_constructible<value_type, First &&>::value) &&
-              (!jstd::is_same_ex<First, init_type>::value &&
+              (!std::is_same<First, init_type>::value &&
                !std::is_constructible<init_type, First &&>::value) &&
-              (!jstd::is_same_ex<First, std::piecewise_construct_t>::value) &&
-              (!jstd::is_same_ex<First, key_type>::value &&
+              (!std::is_same<First, std::piecewise_construct_t>::value) &&
+              (!std::is_same<First, key_type>::value &&
                !std::is_constructible<key_type, First &&>::value)>::type * = nullptr,
                 typename ... Args>
     JSTD_FORCED_INLINE
@@ -1946,8 +1977,8 @@ private:
 
         auto find_info = this->find_and_insert(tmp_slot->value.first);
         size_type slot_index = find_info.first;
-        bool is_exists = find_info.second;
-        if (!is_exists) {
+        bool need_insert = find_info.second;
+        if (need_insert) {
             // The key to be inserted is not exists.
             slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
@@ -1962,7 +1993,7 @@ private:
             }
         }
         SlotPolicyTraits::destroy(&this->slot_allocator_, tmp_slot);
-        return { this->iterator_at(slot_index), is_exists };
+        return { this->iterator_at(slot_index), need_insert };
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////
@@ -1972,8 +2003,8 @@ private:
     std::pair<iterator, bool> try_emplace_impl(const KeyT & key, Args && ... args) {
         auto find_info = this->find_and_insert(key);
         size_type slot_index = find_info.first;
-        bool is_exists = find_info.second;
-        if (!is_exists) {
+        bool need_insert = find_info.second;
+        if (need_insert) {
             // The key to be inserted is not exists.
             slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
@@ -1983,7 +2014,7 @@ private:
                                         std::forward_as_tuple(std::forward<Args>(args)...));
             this->slot_size_++;
         }
-        return { this->iterator_at(slot_index), is_exists };
+        return { this->iterator_at(slot_index), need_insert };
     }
 
     template <typename KeyT, typename ... Args>
@@ -1991,8 +2022,8 @@ private:
     std::pair<iterator, bool> try_emplace_impl(KeyT && key, Args && ... args) {
         auto find_info = this->find_and_insert(key);
         size_type slot_index = find_info.first;
-        bool is_exists = find_info.second;
-        if (!is_exists) {
+        bool need_insert = find_info.second;
+        if (need_insert) {
             // The key to be inserted is not exists.
             slot_type * slot = this->slot_at(slot_index);
             assert(slot != nullptr);
@@ -2002,7 +2033,7 @@ private:
                                         std::forward_as_tuple(std::forward<Args>(args)...));
             this->slot_size_++;
         }
-        return { this->iterator_at(slot_index), is_exists };
+        return { this->iterator_at(slot_index), need_insert };
     }
 
     JSTD_FORCED_INLINE

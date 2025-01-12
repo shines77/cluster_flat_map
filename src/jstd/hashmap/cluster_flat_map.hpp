@@ -366,8 +366,8 @@ public:
     }
 
     template <typename P, typename std::enable_if<
-              (!std::is_same<P, value_type>::value &&
-               !std::is_same<P, init_type >::value) &&
+              (!jstd::is_same_ex<P, value_type>::value &&
+               !jstd::is_same_ex<P, init_type >::value) &&
                (std::is_constructible<value_type, P &&>::value ||
                 std::is_constructible<init_type,  P &&>::value)>::type * = nullptr>
     JSTD_FORCED_INLINE
@@ -396,8 +396,8 @@ public:
     }
 
     template <typename P, typename std::enable_if<
-              (!std::is_same<P, value_type>::value &&
-               !std::is_same<P, init_type >::value) &&
+              (!jstd::is_same_ex<P, value_type>::value &&
+               !jstd::is_same_ex<P, init_type >::value) &&
                (std::is_constructible<value_type, P &&>::value ||
                 std::is_constructible<init_type,  P &&>::value)>::type * = nullptr>
     JSTD_FORCED_INLINE
