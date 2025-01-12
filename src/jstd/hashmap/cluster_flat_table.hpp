@@ -208,10 +208,11 @@ public:
     static constexpr size_type kMinCapacity = 2;
 
     static constexpr float kMinLoadFactorF = 0.2f;
-    static constexpr float kMaxLoadFactorF = 0.875f;
+    static constexpr float kMaxLoadFactorF = 0.5f;
     // Default load factor = 224 / 256 = 0.875
     static constexpr size_type kLoadFactorAmplify = 256;
-    static constexpr size_type kDefaultMaxLoadFactor = 224;
+    static constexpr size_type kDefaultMaxLoadFactor =
+        static_cast<size_type>((double)kLoadFactorAmplify * (double)kMaxLoadFactorF + 0.5);
 
     static constexpr size_type kSkipGroupsLimit = 5;
 
