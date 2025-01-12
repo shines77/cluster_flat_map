@@ -207,8 +207,8 @@ public:
     // kMinCapacity must be >= 2
     static constexpr size_type kMinCapacity = 2;
 
-    static constexpr float kMinLoadFactorF = 0.2f;
-    static constexpr float kMaxLoadFactorF = 0.5f;
+    static constexpr float kMinLoadFactorF = 0.3f;
+    static constexpr float kMaxLoadFactorF = 0.7f;
     // Default load factor = 224 / 256 = 0.875
     static constexpr size_type kLoadFactorAmplify = 256;
     static constexpr size_type kDefaultMaxLoadFactor =
